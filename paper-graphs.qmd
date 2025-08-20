@@ -1,0 +1,74 @@
+---
+title: "paper-graphs"
+format: html
+editor: visual
+---
+
+```{r}
+# set up
+library(ggplot2)
+paper_theme <- theme_minimal(base_family = "Atkinson Hyperlegible", base_size = 16)
+```
+
+```{r}
+#Simualations - Theta coverage by category system
+ggplot(categories_per_run_repeated) +
+  aes(x = category_system, y = theta_coverage) +
+  geom_boxplot(fill = "darkgray") +
+  labs(
+    title = "Theta coverage by category system",
+    x = "Category system",
+    y = "Theta coverage"
+  )
+```
+
+```{r}
+# 95% credible interval on Hicklin - 3 category responses
+response3_after_fitting <- read.csv("fitting_on_real_data/Hicklin_2025/Hicklin_3category_fitting.csv")
+#theta coverage
+ggplot(response3_after_fitting, aes(y = exID, x = theta_hat, color = ThetaContainsZero)) +
+  geom_errorbarh(aes(xmin = theta_low, xmax = theta_high), height = 0.3) +
+  geom_point( color = "black") +
+  scale_color_manual(values = c("FALSE" = "purple", "TRUE" = "deeppink")) +
+  labs(x = "95% Credible Interval", y = "Theta Estimates (Examiner Proficiency)") +
+  theme_minimal() +
+  theme(
+    legend.position = "none",  
+    panel.grid.major.y = element_blank(),
+     panel.background = element_rect(fill = "transparent", color = NA),
+    plot.background = element_rect(fill = "transparent", color = NA), 
+    legend.background = element_rect(fill = "transparent", color = NA),
+    legend.box.background = element_rect(fill = "transparent", color = NA)
+  )
+
+#beta coverage
+ggplot(response3_after_fitting, aes(y = pairID, x = beta_hat, color = BetaContainsZero)) +
+  geom_errorbarh(aes(xmin = beta_low, xmax = beta_high), height = 0.3) +
+  geom_point( color = "black") +
+  scale_color_manual(values = c("FALSE" = "purple", "TRUE" = "deeppink")) +
+  labs(x = "95% Credible Interval", y = "Beta Estimates (Item difficulty)") +
+  theme_minimal() +
+  theme(
+    legend.position = "none",  
+    panel.grid.major.y = element_blank(),
+     panel.background = element_rect(fill = "transparent", color = NA),
+    plot.background = element_rect(fill = "transparent", color = NA), 
+    legend.background = element_rect(fill = "transparent", color = NA),
+    legend.box.background = element_rect(fill = "transparent", color = NA)
+  )
+```
+
+```{r}
+# Ridgeplot of beta estimates by conclusion category
+
+Hicklin %>% 
+  ggplot(aes(x = Estimate.Intercept, y = as.factor(response5), fill = response5)) +
+  geom_density_ridges2(panel_scaling = FALSE) +
+  paper_theme +
+  scale_fill_viridis_c() +
+  theme(legend.position = "none") +
+  scale_y_discrete(labels=c("1" = "Exclusion", "2" = "Lean Exclusion",
+                             "3" = "Inconclusive", "4" = "Lean Identification", "5" = "Identification", "NA" = "No Value")) +
+  labs( x = "Beta Estimates", y = "", title = "Distribution of Beta Estimates for Each 
+Conclusion Type")
+```
