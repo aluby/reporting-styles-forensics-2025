@@ -1,0 +1,292 @@
+---
+title: "data_cleaning"
+format: html
+---
+
+```{r}
+library(tidyverse)
+library(dplyr)
+library(gtools)
+```
+
+## Primary Data
+
+### Hicklin 2025 fingerprints
+
+```{r}
+Hicklin <- read_csv("data_unchanged/Hicklin.csv")
+
+Hicklin <- Hicklin %>% 
+  summarise(
+    "exID" = as.numeric(factor(AnonId)), 
+    "pairID" = as.numeric(factor(PacketId)),
+    "responseID" = row_number(),
+    "ground_truth" = as.factor(Mating),
+    "reported_difficulty" = case_when(
+    Hicklin$`LPIP-09_DIFFCLTY` == "A_VEASY" ~ 1, 
+    Hicklin$`LPIP-09_DIFFCLTY` == "B_EASY" ~ 2,
+    Hicklin$`LPIP-09_DIFFCLTY` == "C_MOD" ~ 3,
+    Hicklin$`LPIP-09_DIFFCLTY` == "D_DIFF" ~ 4,
+    Hicklin$`LPIP-09_DIFFCLTY` == "E_VDIFF" ~ 5,
+    ),
+    "value_decision" = Hicklin$`LPIP-01_LATVAL`,
+    "response3" = case_when(
+      Hicklin$`LPIP-04_CONC` == "A_EX" ~ 1,
+      Hicklin$`LPIP-04_CONC` == "B_INC" ~ 2,
+      Hicklin$`LPIP-04_CONC` == "C_ID" ~ 3
+      ),
+    "response5" = case_when(
+      Hicklin$`LPIP-05_INCCAT` == "A_INCDIFF" ~ 2,
+      Hicklin$`LPIP-05_INCCAT` == "C_INCSIM" ~ 4,
+      Hicklin$`LPIP-05_INCCAT` == "B_INC" ~ 3,
+      Hicklin$`LPIP-04_CONC` == "A_EX" ~ 1,
+      Hicklin$`LPIP-04_CONC`== "C_ID" ~ 5
+    )
+  )
+
+write_csv(Hicklin, "data_changed/Hicklin_mutated.csv")
+```
+
+### 2011 Fingerprints
+
+```{r}
+fingerprints_2011 <- read_table("data/TestResponses.txt", col_names = TRUE)
+
+fingerprints_2011 <- fingerprints_2011 %>% 
+  summarise(
+    "exID" = as.numeric(factor(fingerprints_2011$Examiner_ID)), 
+    "pairID" = as.numeric(factor(fingerprints_2011$Pair_ID)),
+    "responseID" = row_number(),
+    "ground_truth" = as.factor(Mating),
+    "response3" = case_when(
+      fingerprints_2011$Compare_Value == "Exclusion" ~ 1,
+      fingerprints_2011$Compare_Value == "Inconclusive" ~ 2,
+      fingerprints_2011$Compare_Value == "Individualization" ~ 3),
+  "reported_difficulty" = case_when(
+    fingerprints_2011$Difficulty == "A_Obvious" ~ 1,
+    fingerprints_2011$Difficulty == "B_Easy" ~ 2,
+    fingerprints_2011$Difficulty == "C_medium" ~ 3,
+    fingerprints_2011$Difficulty == "D_Difficult" ~ 4,
+    fingerprints_2011$Difficulty == "E_VeryDifficult" ~ 5)
+  )
+
+write_csv(fingerprints_2011, "data_changed/fingerprints_2011.csv")
+```
+
+## Supplementary Data
+
+### Busey fingerprints
+
+```{r}
+busey <- read_delim("data_unchanged/results2 copy.csv", delim = ";")
+
+busey <- busey %>% 
+  summarise(
+    "exID" = as.numeric(factor(busey$userid)), 
+    "pairID" = as.numeric(factor(busey$stimid)),
+    "responseID" = row_number(),
+    "ground_truth" = case_when(
+      even(busey$stimid) ~ "Mated", .default = "Nonmated"
+    ),
+    "response3" = recode(decision, '0' = 1, '1' = 2, '2' = 2, '3' = 2, '4'= 3),
+  "response5" = recode(decision, '0' = 1, '1' = 2, '2' = 3, '3' = 4, '4'= 5))
+
+write_csv(busey, "data_changed/busey.csv")
+```
+
+### bullets
+
+```{r}
+bullets_KQ <- read_csv("data_unchanged/KQ_responses_bullets.csv", col_names = TRUE) 
+
+bullets_KQ <- bullets_KQ %>% 
+  summarise(
+    "exID" = as.numeric(factor(bullets_KQ$AnonID)), # needs to be unique examiner id, but from 1 to the number of examiners 
+    "pairID" = as.numeric(factor(Cset)),
+    "responseID" = row_number(),
+    "ground_truth" = as.factor(Mating),
+    "KQ/QQ" = "KQ", # differentiating between KQ and QQ bullet sets so that I can join the two
+    "value_decision" = bullets_KQ$K01_Q1value,
+    "response3" = case_when(
+      bullets_KQ$K08_Conclusion == "Excl" ~ 1,
+      bullets_KQ$K08_Conclusion == "LeanExcl" ~ 2,
+      bullets_KQ$K08_Conclusion == "Insuff" ~ 2,
+      bullets_KQ$K08_Conclusion == "LeanID" ~ 2,
+      bullets_KQ$K08_Conclusion == "ID" ~ 3),
+  "response5" = case_when(
+      bullets_KQ$K08_Conclusion == "Excl" ~ 1,
+      bullets_KQ$K08_Conclusion == "LeanExcl" ~ 2,
+      bullets_KQ$K08_Conclusion == "Insuff" ~ 3,
+      bullets_KQ$K08_Conclusion == "LeanID" ~ 4,
+      bullets_KQ$K08_Conclusion == "ID" ~ 5),
+  "reported_difficulty" = case_when( # need this to be an integer on one scale
+    bullets_KQ$K09_Difficulty == "VEasy" ~ 1,
+    bullets_KQ$K09_Difficulty == "Easy" ~ 2,
+    bullets_KQ$K09_Difficulty == "Norm" ~ 3,
+    bullets_KQ$K09_Difficulty == "Diff" ~ 4,
+    bullets_KQ$K09_Difficulty == "VDiff" ~ 5)
+  )
+
+
+# QQ sets are more likely to be seen in actual casework than KQ sets - when unknown bullets are compared to each other, seeing if two shootings are related or if multiple bullets at one crime scene are from the same gun
+bullets_QQ <- read_csv("data_unchanged/QQ_responses_bullets_casework.csv", col_names = TRUE) 
+
+bullets_QQ <- bullets_QQ %>% 
+    summarise(
+    "exID" = as.numeric(factor(bullets_QQ$AnonID)), 
+    "pairID" = as.numeric(factor(Cset)),
+    "responseID" = row_number(),
+    "ground_truth" = as.factor(Mating),
+    "KQ/QQ" = "QQ",
+    "value_decision" = bullets_QQ$Q01_Q1value,
+    "response3" = case_when(
+      bullets_QQ$Q08_Conclusion == "Excl" ~ 1,
+      bullets_QQ$Q08_Conclusion == "LeanExcl" ~ 2,
+      bullets_QQ$Q08_Conclusion == "Insuff" ~ 2,
+      bullets_QQ$Q08_Conclusion == "LeanID" ~ 2,
+      bullets_QQ$Q08_Conclusion == "ID" ~ 3),
+  "response5" = case_when(
+      bullets_QQ$Q08_Conclusion == "Excl" ~ 1,
+      bullets_QQ$Q08_Conclusion == "LeanExcl" ~ 2,
+      bullets_QQ$Q08_Conclusion == "Insuff" ~ 3,
+      bullets_QQ$Q08_Conclusion == "LeanID" ~ 4,
+      bullets_QQ$Q08_Conclusion == "ID" ~ 5),
+  "reported_difficulty" = case_when(
+    bullets_QQ$Q09_Difficulty == "VEasy" ~ 1,
+    bullets_QQ$Q09_Difficulty == "Easy" ~ 2,
+    bullets_QQ$Q09_Difficulty == "Norm" ~ 3,
+    bullets_QQ$Q09_Difficulty == "Diff" ~ 4,
+    bullets_QQ$Q09_Difficulty == "VDiff" ~ 5)
+  )
+
+bullets <- bind_rows(bullets_KQ, bullets_QQ) # joining the two datasets 
+
+write_csv(bullets, "data_changed/bullets.csv")
+```
+
+### Footwear
+
+```{r}
+footwear <- read_csv("data_unchanged/footwear_data.csv")
+
+footwear <- footwear %>% 
+  summarise(
+    "exID" = as.numeric(factor(footwear$AnonID)), 
+    "pairID" = as.numeric(factor(footwear$QKset)),
+    "responseID" = row_number(),
+    "ground_truth" = as.factor(Mating),
+    "value_decision" = footwear$`1_Value`,
+    "response3" = case_when(
+      footwear$Conclusion == "Excl" ~ 1,
+      footwear$Conclusion == "NonAssn" ~ 2,
+      footwear$Conclusion == "HighAssn" ~ 2,
+      footwear$Conclusion == "Assn" ~ 2,
+      footwear$Conclusion == "Inc" ~ 2,
+      footwear$Conclusion == "LimitedAssn" ~ 2,
+      footwear$Conclusion == "ID" ~ 3),
+  "response5" = case_when(
+      footwear$Conclusion == "Excl" ~ 1,
+      footwear$Conclusion == "NonAssn" ~ 2,
+      footwear$Conclusion == "LimitedAssn" ~ 2,
+      footwear$Conclusion == "Inc" ~ 3,
+      footwear$Conclusion == "Assn" ~ 4,
+      footwear$Conclusion == "HighAssn" ~ 4,
+      footwear$Conclusion == "ID" ~ 5),
+  "response7" = case_when(
+    footwear$Conclusion == "Excl" ~ 1,
+      footwear$Conclusion == "NonAssn" ~ 2,
+      footwear$Conclusion == "LimitedAssn" ~ 3,
+      footwear$Conclusion == "Inc" ~ 4,
+      footwear$Conclusion == "Assn" ~ 5,
+      footwear$Conclusion == "HighAssn" ~ 6,
+      footwear$Conclusion == "ID" ~ 7),
+  "reported_difficulty" = case_when(
+    footwear$Difficulty == "VEasy" ~ 1,
+    footwear$Difficulty == "Easy" ~ 2,
+    footwear$Difficulty == "Moderate" ~ 3,
+    footwear$Difficulty == "Difficult" ~ 4,
+    footwear$Difficulty == "VDifficult" ~ 5)
+  )
+
+write_csv(footwear, "data_changed/footwear.csv")
+```
+
+### Hand writing
+
+```{r}
+hand_writing <- read_csv("data_unchanged/handwriting_data.csv")
+ 
+hand_writing <- hand_writing %>% 
+  summarise(
+    "exID" = as.numeric(factor(hand_writing$`Participant (AnonID)`)), 
+    "pairID" = as.numeric(factor(hand_writing$QKset)),
+    "responseID" = row_number(),
+    "ground_truth" = as.factor(Mating),
+    "response3" = case_when(
+      hand_writing$Conclusion == "NotWritten" ~ 1,
+      hand_writing$Conclusion == "ProbNot" ~ 2,
+      hand_writing$Conclusion == "NoConc" ~ 2,
+      hand_writing$Conclusion == "ProbWritten" ~ 2,
+      hand_writing$Conclusion == "Written" ~ 3),
+  "response5" = case_when(
+      hand_writing$Conclusion == "NotWritten" ~ 1,
+      hand_writing$Conclusion == "ProbNot" ~ 2,
+      hand_writing$Conclusion == "NoConc" ~ 3,
+      hand_writing$Conclusion == "ProbWritten" ~ 4,
+      hand_writing$Conclusion == "Written" ~ 5),
+  "reported_difficulty" = case_when(
+    hand_writing$Difficulty == "Easy" ~ 1,
+    hand_writing$Difficulty == "Med" ~ 3,
+    hand_writing$Difficulty == "Diff" ~ 5)
+  )
+
+write_csv(hand_writing, "data_changed/hand_writing.csv")
+```
+
+### Tire Marks
+
+```{r}
+tire_marks <- read_csv("data_unchanged/tiremarks.csv") 
+
+tire_marks <- tire_marks %>% 
+  summarise(
+    "exID" = as.numeric(factor(AnonId)),
+    "pairID" = as.numeric(factor(QKset)),
+    "responseID" = row_number(),
+    "ground_truth" = as.factor(Mating),
+    "reported_difficulty" = case_when(
+      tire_marks$`TIRE-23_DIFF` == "A_VEASY" ~ 1,
+      `TIRE-23_DIFF` == "B_EASY" ~ 2,
+      `TIRE-23_DIFF` == "C_MODERATE" ~ 3,
+      `TIRE-23_DIFF` == "D_DIFFICULT" ~ 4,
+      `TIRE-23_DIFF` == "E_VDIFF" ~ 5
+    ),
+    "value_decision" = `TIRE-12_SUIT`,
+    "response3" = case_when(
+      Conclusion == "Excl" ~ 1,
+      Conclusion == "NonAssn" ~ 2,
+      Conclusion == "Assn" ~ 2,
+      Conclusion == "Inc" ~ 2,
+      Conclusion == "LimitedAssn" ~ 2,
+      Conclusion == "HighAssn" ~ 2,
+      Conclusion == "ID" ~ 3),
+    "response5" = case_when(
+      Conclusion == "Excl" ~ 1,
+      Conclusion == "NonAssn" ~ 2,
+      Conclusion == "LimitedAssn" ~ 2,
+      Conclusion == "Inc" ~ 3,
+      Conclusion == "Assn" ~ 4,
+      Conclusion == "HighAssn" ~ 4,
+      Conclusion == "ID" ~ 5),
+    "response7" = case_when(
+      Conclusion == "Excl" ~ 1,
+      Conclusion == "NonAssn" ~ 2,
+      Conclusion == "LimitedAssn" ~ 3,
+      Conclusion == "Inc" ~ 4,
+      Conclusion == "Assn" ~ 5,
+      Conclusion == "HighAssn" ~ 6,
+      Conclusion == "ID" ~ 7)
+    )
+
+write_csv(tire_marks, "data_changed/tire_marks.csv")
+```
