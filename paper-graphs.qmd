@@ -97,3 +97,7 @@ library(bayesplot)
 color_scheme_set("purple")
 pp_check(hicklin_brms_subset, type = "bars_grouped", group = "pairID", stat = "median" )
 ```
+
+```{r}
+
+```
