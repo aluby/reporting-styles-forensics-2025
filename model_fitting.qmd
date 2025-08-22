@@ -279,13 +279,13 @@ busey_Nre_3cat_beta_est <- ranef(busey_Nre_3cat_fit, robust = TRUE)$pairID |>
          beta_error = Est.Error.Intercept,
          beta_Q2.5 = Q2.5.Intercept,
          beta_Q97.5 = Q97.5.Intercept)
-busey_Nre_3cat_theta_est <- ranef(busey_Nre_3cat_fit, robust = TRUE)$exID |>
-  as.data.frame() |>
-  rownames_to_column(var = "exID") |>
-  rename(theta_med = Estimate.Intercept,
-         theta_error = Est.Error.Intercept,
-         theta_Q2.5 = Q2.5.Intercept,
-         theta_Q97.5 = Q97.5.Intercept)
+
+exID_levels <- levels(factor(busey_data$exID))
+busey_Nre_3cat_theta_est <- tibble::tibble(exID = exID_levels, 
+                                           theta_med = 0,
+                                           theta_error = 0,
+                                           theta_Q2.5 = 0,
+                                           theta_Q97.5 = 0)
 
 # Hicklin
 hicklin_Nre_3cat_beta_est <- ranef(hicklin_Nre_3cat_fit, robust = TRUE)$pairID |>
@@ -296,14 +296,13 @@ hicklin_Nre_3cat_beta_est <- ranef(hicklin_Nre_3cat_fit, robust = TRUE)$pairID |
          beta_error = Est.Error.Intercept,
          beta_Q2.5 = Q2.5.Intercept,
          beta_Q97.5 = Q97.5.Intercept)
-hicklin_Nre_3cat_theta_est <- ranef(hicklin_Nre_3cat_fit, robust = TRUE)$exID |>
-  as.data.frame() |>
-  rownames_to_column(var = "exID") |>
-  mutate(exID = factor(exID)) |>
-  rename(theta_med = Estimate.Intercept,
-         theta_error = Est.Error.Intercept,
-         theta_Q2.5 = Q2.5.Intercept,
-         theta_Q97.5 = Q97.5.Intercept)
+
+exID_levels <- levels(factor(hicklin_data$exID))
+hicklin_Nre_3cat_theta_est <- tibble::tibble(exID = exID_levels, 
+                                           theta_med = 0,
+                                           theta_error = 0,
+                                           theta_Q2.5 = 0,
+                                           theta_Q97.5 = 0)
 
 # Ulery
 ulery_Nre_3cat_beta_est <- ranef(ulery_Nre_3cat_fit, robust = TRUE)$pairID |>
@@ -322,6 +321,13 @@ ulery_Nre_3cat_theta_est <- ranef(ulery_Nre_3cat_fit, robust = TRUE)$exID |>
          theta_error = Est.Error.Intercept,
          theta_Q2.5 = Q2.5.Intercept,
          theta_Q97.5 = Q97.5.Intercept)
+
+exID_levels <- levels(factor(ulery_data$exID))
+ulery_Nre_3cat_theta_est <- tibble::tibble(exID = exID_levels, 
+                                           theta_med = 0,
+                                           theta_error = 0,
+                                           theta_Q2.5 = 0,
+                                           theta_Q97.5 = 0)
 ```
 
 #### 5-category, without random effects on exID
