@@ -160,6 +160,7 @@ hicklin_busey_comparison <- hicklin_compare %>%
 
 no_theta_comparison_plot <- ggplot(hicklin_busey_comparison) +
   geom_point(aes(x = Estimate.Intercept.y, y = Estimate.Intercept.x, color = ground_truth)) +
+  geom_abline(yintercept = 0, slope = 1, color = "#B12A90FF") +
   scale_color_viridis_d(option = "plasma", end = 0.8, labels = 
                           c("M" = "Mated",
                             "N" = "Non-Mated")) +
