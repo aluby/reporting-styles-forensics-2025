@@ -61,14 +61,39 @@ ggplot(response3_after_fitting, aes(y = pairID, x = beta_hat, color = BetaContai
 ```{r}
 # Ridgeplot of beta estimates by conclusion category
 
-Hicklin %>% 
-  ggplot(aes(x = Estimate.Intercept, y = as.factor(response5), fill = response5)) +
-  geom_density_ridges2(panel_scaling = FALSE) +
+final_ridgeplot <- Hicklin |>
+  drop_na(response5) |>
+  left_join(ranef(hicklin_brms_model)$pairID |>
+    as_tibble() |> 
+    rownames_to_column(var = "pairID") |>
+      mutate(pairID = as.numeric(pairID))) |> 
+  mutate(
+    beta_adj = `Estimate.Intercept` + 4.58*as.numeric(ground_truth == "N")
+  ) |>
+  ggplot() + 
+  geom_density_ridges(aes(x = beta_adj, y = as.factor(response5), fill = as.factor(response5))) +
+  scale_fill_viridis_d(option = "plasma", end = 0.8) +
+  scale_y_discrete(labels=c("5" = "Exclusion", "4" = "Lean Exclusion",
+                             "3" = "Inconclusive", "2" = "Lean Identification", "1" = "Identification")) +
+  theme(
+    legend.position = "none",  
+    panel.grid.major.y = element_blank(),
+     panel.background = element_rect(fill = "transparent", color = NA),
+    plot.background = element_rect(fill = "transparent", color = NA), 
+    legend.background = element_rect(fill = "transparent", color = NA),
+    legend.box.background = element_rect(fill = "transparent", color = NA)
+  ) +
   paper_theme +
-  scale_fill_viridis_c() +
-  theme(legend.position = "none") +
-  scale_y_discrete(labels=c("1" = "Exclusion", "2" = "Lean Exclusion",
-                             "3" = "Inconclusive", "4" = "Lean Identification", "5" = "Identification", "NA" = "No Value")) +
+     theme(legend.position = "none") +
   labs( x = "Beta Estimates", y = "", title = "Distribution of Beta Estimates for Each 
-Conclusion Type")
+Conclusion Type", subtitle = "Only Non-mated Image Pairs")
+
+ggsave("ridgeplot.png", final_ridgeplot)
+```
+
+```{r}
+# posterior predictive check graphs - can plug in any brms model
+library(bayesplot)
+color_scheme_set("purple")
+pp_check(hicklin_brms_subset, type = "bars_grouped", group = "pairID", stat = "median" )
 ```
