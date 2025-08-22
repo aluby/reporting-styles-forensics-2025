@@ -2,10 +2,16 @@
 
 Summer 2025 research project at Carleton College investigating reporting styles of forensic scientists
 
-The data_cleaning.qmd file contains all code used to mutate the data sets mentioned throughout our paper. More information on the data sets can be found in the README_data.md file. The data_changed folder contains the final, mutated data, while the data_unchanged folder contains the original data sets.
+#### The following is a list of everything in the repository. It contains information on where to find everything mentioned in our paper.
 
-All code used to make our results graphs can be found in the paper-graphs.qmd file.
+-   **`README_DATA` —** contains additional information of the data sets used for our analysis, along with non-fingerprint data sets that our model could be applied to. It details all of the things we changed about the original data sets and what each variable represents. This file also contains links to all of the original studies.
 
-All simulation data and analysis can be found in the simulation_data folder.
+    -   **`data_unchanged` —** reads in all of the original data sets, both the ones directly used in our analysis and the ones that our model could be fit to.
 
-Finally, our the code we used to fit our final model can be found in the Raw Stan Code and Brms Code folders, depending on which coding style you prefer. The Brms code runs faster, but we had less control over the final model, which is why we implemented both coding formats in our analysis.
+    -   **`data_changed` —** contains all of the mutated data sets
+
+    -   **`data_cleaning.qmd` —** all of the code used to mutate the data sets
+
+-   **`paper-graphs.qmd` —** all of the code used to create all of the graphs in our paper
+
+-   **`Graph_images` —** all of the image files of the graphs used in our paper
