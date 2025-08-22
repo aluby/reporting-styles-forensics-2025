@@ -95,7 +95,7 @@ ggsave("ridgeplot.png", final_ridgeplot)
 # posterior predictive check graphs - can plug in any brms model
 library(bayesplot)
 color_scheme_set("purple")
-pp_check(hicklin_brms_subset, type = "bars_grouped", group = "pairID", stat = "median" )
+pp_check(hicklin_brms, type = "bars_grouped", group = "pairID", stat = "median" )
 ```
 
 ```{r}
@@ -128,7 +128,23 @@ hicklin_brms__notheta <- brm(
   cores = 4
 )
 
-# pulling the estimates out of the model
+# need to take out NAs from the original Hicklin data set so that the image pairs line up to their correct estimates when we join the data sets together
+hicklin_item_lookup <- Hicklin |>
+  group_by(pairID) |>
+  summarize(
+    ground_truth = first(ground_truth)
+  ) |>
+  left_join( Hicklin |>
+  drop_na(response3) |>
+  group_by(pairID) |>
+  summarize(
+    ground_truth = first(ground_truth)
+  ) |>
+  ungroup() |>
+  mutate(
+    new_pairID = 1:n()
+  ))
+
 hicklin_compare <- ranef(hicklin_brms_model)$pairID %>% as.tibble() %>% 
   mutate(
     "pairID" = row_number()
@@ -138,12 +154,10 @@ hicklin_compare2 <- ranef(hicklin_brms__notheta)$pairID %>% as.tibble() %>%
     "pairID" = row_number()
   )
   
-# joining the estimate data sets to the original data set
 hicklin_busey_comparison <- hicklin_compare %>% 
   left_join(hicklin_compare2, by = "pairID") %>% 
-  left_join(Hicklin, by = "pairID")
+  left_join(hicklin_item_lookup, by = c("pairID" = "new_pairID"))
 
-# making the graph
 no_theta_comparison_plot <- ggplot(hicklin_busey_comparison) +
   geom_point(aes(x = Estimate.Intercept.y, y = Estimate.Intercept.x, color = ground_truth)) +
   scale_color_viridis_d(option = "plasma", end = 0.8, labels = 
