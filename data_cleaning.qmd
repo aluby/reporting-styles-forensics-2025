@@ -41,6 +41,10 @@ Hicklin <- Hicklin %>%
       Hicklin$`LPIP-05_INCCAT` == "B_INC" ~ 3,
       Hicklin$`LPIP-04_CONC` == "A_EX" ~ 1,
       Hicklin$`LPIP-04_CONC`== "C_ID" ~ 5
+    ),
+    "ds" = case_when(
+      ground_truth == "M" ~ 0,
+      ground_truth == "N" ~ 1
     )
   )
 
@@ -67,7 +71,10 @@ fingerprints_2011 <- fingerprints_2011 %>%
     fingerprints_2011$Difficulty == "B_Easy" ~ 2,
     fingerprints_2011$Difficulty == "C_medium" ~ 3,
     fingerprints_2011$Difficulty == "D_Difficult" ~ 4,
-    fingerprints_2011$Difficulty == "E_VeryDifficult" ~ 5)
+    fingerprints_2011$Difficulty == "E_VeryDifficult" ~ 5),
+  "ds" = case_when(
+      ground_truth == "M" ~ 0,
+      ground_truth == "N" ~ 1
   )
 
 write_csv(fingerprints_2011, "data_changed/fingerprints_2011.csv")
@@ -89,7 +96,10 @@ busey <- busey %>%
       even(busey$stimid) ~ "Mated", .default = "Nonmated"
     ),
     "response3" = recode(decision, '0' = 1, '1' = 2, '2' = 2, '3' = 2, '4'= 3),
-  "response5" = recode(decision, '0' = 1, '1' = 2, '2' = 3, '3' = 4, '4'= 5))
+  "response5" = recode(decision, '0' = 1, '1' = 2, '2' = 3, '3' = 4, '4'= 5),
+  "ds" = case_when(
+      ground_truth == "M" ~ 0,
+      ground_truth == "N" ~ 1)
 
 write_csv(busey, "data_changed/busey.csv")
 ```
