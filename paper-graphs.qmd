@@ -99,5 +99,60 @@ pp_check(hicklin_brms_subset, type = "bars_grouped", group = "pairID", stat = "m
 ```
 
 ```{r}
+# comparison plot of betas from Busey's model and from our model
+
+# models ran to get the estimates from
+hicklin_brms <- Hicklin %>% 
+  mutate(
+        "ds" = case_when(
+      ground_truth == "M" ~ 0,
+      ground_truth == "N" ~ 1
+  )) %>% 
+  brm(
+    formula = response5 ~ ds + (1|pairID) + (1|exID),
+    data = Hicklin,
+  family = cumulative(probit),
+  chains = 4,
+  iter = 2000,
+  seed = 6127,
+  cores = 4
+  )
+
+hicklin_brms__notheta <- brm(
+  formula = response5 ~ (1 | pairID),
+  data = Hicklin,
+  family = cumulative(probit),
+  chains = 4,
+  iter = 2000,
+  seed = 6127,
+  cores = 4
+)
+
+# pulling the estimates out of the model
+hicklin_compare <- ranef(hicklin_brms_model)$pairID %>% as.tibble() %>% 
+  mutate(
+    "pairID" = row_number()
+  )
+hicklin_compare2 <- ranef(hicklin_brms__notheta)$pairID %>% as.tibble() %>% 
+  mutate(
+    "pairID" = row_number()
+  )
+  
+# joining the estimate data sets to the original data set
+hicklin_busey_comparison <- hicklin_compare %>% 
+  left_join(hicklin_compare2, by = "pairID") %>% 
+  left_join(Hicklin, by = "pairID")
+
+# making the graph
+no_theta_comparison_plot <- ggplot(hicklin_busey_comparison) +
+  geom_point(aes(x = Estimate.Intercept.y, y = Estimate.Intercept.x, color = ground_truth)) +
+  scale_color_viridis_d(option = "plasma", end = 0.8, labels = 
+                          c("M" = "Mated",
+                            "N" = "Non-Mated")) +
+  labs(x = "No Theta Model Beta Estimates", y = "Our Model Beta Estimates", title = "No Theta Model Estimates Vs. 
+       Theta Model Estimates", color = "Ground Truth") +
+  paper_theme 
+  
+ggsave("no_theta_comparison_plot.png", no_theta_comparison_plot)
 
 ```
