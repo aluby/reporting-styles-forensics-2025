@@ -1,0 +1,715 @@
+---
+title: "model_fitting"
+format: html
+---
+
+```{r}
+library(readr)
+library(brms)
+```
+
+### Load data
+
+```{r}
+# Busey 2025
+busey_data <- 
+  read_delim("~/Documents/GitHub/forensic-stats-research/data_changed/busey.csv", delim = ",") |>
+  mutate(row_num = row_number())
+
+busey_data$response3 <- as.integer(busey_data$response3)
+busey_data$response5 <- as.integer(busey_data$response5)
+busey_data$ground_truth <- as.factor(busey_data$ground_truth)
+busey_data$pairID <- as.factor(busey_data$pairID)
+busey_data$exID <- as.factor(busey_data$exID)
+busey_data$row_num <- as.factor(busey_data$row_num)
+
+# Hicklin 2022
+hicklin_data <- 
+  read_delim("~/Documents/GitHub/forensic-stats-research/data_changed/Hicklin_mutated.csv", delim = ",") |>
+  filter(!is.na(response3)) |>
+  mutate(row_num = row_number())
+
+hicklin_data$response3 <- as.integer(hicklin_data$response3)
+hicklin_data$response5 <- as.integer(hicklin_data$response5)
+hicklin_data$ground_truth <- as.factor(hicklin_data$ground_truth)
+hicklin_data$pairID <- as.factor(hicklin_data$pairID)
+hicklin_data$exID <- as.factor(hicklin_data$exID)
+hicklin_data$row_num <- as.factor(hicklin_data$row_num)
+
+# Ulery 2011
+ulery_data <- 
+  read_delim("~/Documents/GitHub/forensic-stats-research/data_changed/fingerprints_2011.csv", delim = ",") |>
+  filter(!is.na(response3)) |>
+  mutate(row_num = row_number())
+
+ulery_data$response3 <- as.integer(ulery_data$response3)
+ulery_data$ground_truth <- as.factor(ulery_data$ground_truth)
+ulery_data$pairID <- as.factor(ulery_data$pairID)
+ulery_data$exID <- as.factor(ulery_data$exID)
+ulery_data$row_num <- as.factor(ulery_data$row_num)
+```
+
+### Fit graded response model to Busey, Hicklin, and Ulery data
+
+#### 3-category, with random effects on exID
+
+```{r}
+busey_re_3cat_fit <- brm(
+  formula = response3 ~ ground_truth + (1 | pairID) + (1 | exID),
+  data = busey_data,
+  family = cumulative(probit),
+  chains = 4,
+  iter = 2000,
+  seed = 071525,
+  cores = 4
+)
+
+hicklin_re_3cat_fit <- brm(
+  formula = response3 ~ ground_truth + (1 | pairID) + (1 | exID),
+  data = hicklin_data,
+  family = cumulative(probit),
+  chains = 4,
+  iter = 2000,
+  seed = 071525,
+  cores = 4
+)
+
+ulery_re_3cat_fit <- brm(
+  formula = response3 ~ ground_truth + (1 | pairID) + (1 | exID),
+  data = ulery_data,
+  family = cumulative(probit),
+  chains = 4,
+  iter = 2000,
+  seed = 071525,
+  cores = 4
+)
+```
+
+#### 5-category, with random effects on exID
+
+```{r}
+busey_re_5cat_fit <- brm(
+  formula = response5 ~ ground_truth + (1 | pairID) + (1 | exID),
+  data = busey_data,
+  family = cumulative(probit),
+  chains = 4,
+  iter = 2000,
+  seed = 071525,
+  cores = 4
+)
+
+hicklin_re_5cat_fit <- brm(
+  formula = response5 ~ ground_truth + (1 | pairID) + (1 | exID),
+  data = hicklin_data,
+  family = cumulative(probit),
+  chains = 4,
+  iter = 2000,
+  seed = 071525,
+  cores = 4
+)
+```
+
+#### 3-category, without random effects on exID
+
+```{r}
+busey_Nre_3cat_fit <- brm(
+  formula = response3 ~ ground_truth + (1 | pairID) + exID,
+  data = busey_data,
+  family = cumulative(probit),
+  chains = 4,
+  iter = 2000,
+  seed = 071525,
+  cores = 4
+)
+
+hicklin_Nre_3cat_fit <- brm(
+  formula = response3 ~ ground_truth + (1 | pairID) + exID,
+  data = hicklin_data,
+  family = cumulative(probit),
+  chains = 4,
+  iter = 2000,
+  seed = 071525,
+  cores = 4
+)
+
+ulery_Nre_3cat_fit <- brm(
+  formula = response3 ~ ground_truth + (1 | pairID) + exID,
+  data = ulery_data,
+  family = cumulative(probit),
+  chains = 4,
+  iter = 2000,
+  seed = 071525,
+  cores = 4
+)
+```
+
+#### 5-category, without random effects on exID
+
+```{r}
+busey_Nre_5cat_fit <- brm(
+  formula = response5 ~ ground_truth + (1 | pairID) + exID,
+  data = busey_data,
+  family = cumulative(probit),
+  chains = 4,
+  iter = 2000,
+  seed = 071525,
+  cores = 4
+)
+
+hicklin_Nre_5cat_fit <- brm(
+  formula = response5 ~ ground_truth + (1 | pairID) + exID,
+  data = hicklin_data,
+  family = cumulative(probit),
+  chains = 4,
+  iter = 2000,
+  seed = 071525,
+  cores = 4
+)
+```
+
+### Extract posterior parameter estimates
+
+#### 3-category, with random effects on exID
+
+```{r}
+# random effects for individual image pairs and examiners 
+
+# Busey
+busey_re_3cat_beta_est <- ranef(busey_re_3cat_fit, robust = TRUE)$pairID |>
+  as.data.frame() |>
+  rownames_to_column(var = "pairID") |>
+  mutate(pairID = factor(pairID)) |>
+  rename(beta_med = Estimate.Intercept,
+         beta_error = Est.Error.Intercept,
+         beta_Q2.5 = Q2.5.Intercept,
+         beta_Q97.5 = Q97.5.Intercept)
+busey_re_3cat_theta_est <- ranef(busey_re_3cat_fit, robust = TRUE)$exID |>
+  as.data.frame() |>
+  rownames_to_column(var = "exID") |>
+  rename(theta_med = Estimate.Intercept,
+         theta_error = Est.Error.Intercept,
+         theta_Q2.5 = Q2.5.Intercept,
+         theta_Q97.5 = Q97.5.Intercept)
+
+# Hicklin
+hicklin_re_3cat_beta_est <- ranef(hicklin_re_3cat_fit, robust = TRUE)$pairID |>
+  as.data.frame() |>
+  rownames_to_column(var = "pairID") |>
+  mutate(pairID = factor(pairID)) |>
+  rename(beta_med = Estimate.Intercept,
+         beta_error = Est.Error.Intercept,
+         beta_Q2.5 = Q2.5.Intercept,
+         beta_Q97.5 = Q97.5.Intercept)
+hicklin_re_3cat_theta_est <- ranef(hicklin_re_3cat_fit, robust = TRUE)$exID |>
+  as.data.frame() |>
+  rownames_to_column(var = "exID") |>
+  mutate(exID = factor(exID)) |>
+  rename(theta_med = Estimate.Intercept,
+         theta_error = Est.Error.Intercept,
+         theta_Q2.5 = Q2.5.Intercept,
+         theta_Q97.5 = Q97.5.Intercept)
+
+# Ulery
+ulery_re_3cat_beta_est <- ranef(ulery_re_3cat_fit, robust = TRUE)$pairID |>
+  as.data.frame() |>
+  rownames_to_column(var = "pairID") |>
+  mutate(pairID = factor(pairID)) |>
+  rename(beta_med = Estimate.Intercept,
+         beta_error = Est.Error.Intercept,
+         beta_Q2.5 = Q2.5.Intercept,
+         beta_Q97.5 = Q97.5.Intercept)
+ulery_re_3cat_theta_est <- ranef(ulery_re_3cat_fit, robust = TRUE)$exID |>
+  as.data.frame() |>
+  rownames_to_column(var = "exID") |>
+  mutate(exID = factor(exID)) |>
+  rename(theta_med = Estimate.Intercept,
+         theta_error = Est.Error.Intercept,
+         theta_Q2.5 = Q2.5.Intercept,
+         theta_Q97.5 = Q97.5.Intercept)
+```
+
+#### 5-category, with random effects on exID
+
+```{r}
+# Busey
+busey_re_5cat_beta_est <- ranef(busey_re_5cat_fit, robust = TRUE)$pairID |>
+  as.data.frame() |>
+  rownames_to_column(var = "pairID") |>
+  mutate(pairID = factor(pairID)) |>
+  rename(beta_med = Estimate.Intercept,
+         beta_error = Est.Error.Intercept,
+         beta_Q2.5 = Q2.5.Intercept,
+         beta_Q97.5 = Q97.5.Intercept)
+busey_re_5cat_theta_est <- ranef(busey_re_5cat_fit, robust = TRUE)$exID |>
+  as.data.frame() |>
+  rownames_to_column(var = "exID") |>
+  rename(theta_med = Estimate.Intercept,
+         theta_error = Est.Error.Intercept,
+         theta_Q2.5 = Q2.5.Intercept,
+         theta_Q97.5 = Q97.5.Intercept)
+
+# Hicklin
+hicklin_re_5cat_beta_est <- ranef(hicklin_re_5cat_fit, robust = TRUE)$pairID |>
+  as.data.frame() |>
+  rownames_to_column(var = "pairID") |>
+  mutate(pairID = factor(pairID)) |>
+  rename(beta_med = Estimate.Intercept,
+         beta_error = Est.Error.Intercept,
+         beta_Q2.5 = Q2.5.Intercept,
+         beta_Q97.5 = Q97.5.Intercept)
+hicklin_re_5cat_theta_est <- ranef(hicklin_re_5cat_fit, robust = TRUE)$exID |>
+  as.data.frame() |>
+  rownames_to_column(var = "exID") |>
+  mutate(exID = factor(exID)) |>
+  rename(theta_med = Estimate.Intercept,
+         theta_error = Est.Error.Intercept,
+         theta_Q2.5 = Q2.5.Intercept,
+         theta_Q97.5 = Q97.5.Intercept)
+```
+
+#### 3-category, without random effects on exID
+
+```{r}
+# Busey
+busey_Nre_3cat_beta_est <- ranef(busey_Nre_3cat_fit, robust = TRUE)$pairID |>
+  as.data.frame() |>
+  rownames_to_column(var = "pairID") |>
+  mutate(pairID = factor(pairID)) |>
+  rename(beta_med = Estimate.Intercept,
+         beta_error = Est.Error.Intercept,
+         beta_Q2.5 = Q2.5.Intercept,
+         beta_Q97.5 = Q97.5.Intercept)
+busey_Nre_3cat_theta_est <- ranef(busey_Nre_3cat_fit, robust = TRUE)$exID |>
+  as.data.frame() |>
+  rownames_to_column(var = "exID") |>
+  rename(theta_med = Estimate.Intercept,
+         theta_error = Est.Error.Intercept,
+         theta_Q2.5 = Q2.5.Intercept,
+         theta_Q97.5 = Q97.5.Intercept)
+
+# Hicklin
+hicklin_Nre_3cat_beta_est <- ranef(hicklin_Nre_3cat_fit, robust = TRUE)$pairID |>
+  as.data.frame() |>
+  rownames_to_column(var = "pairID") |>
+  mutate(pairID = factor(pairID)) |>
+  rename(beta_med = Estimate.Intercept,
+         beta_error = Est.Error.Intercept,
+         beta_Q2.5 = Q2.5.Intercept,
+         beta_Q97.5 = Q97.5.Intercept)
+hicklin_Nre_3cat_theta_est <- ranef(hicklin_Nre_3cat_fit, robust = TRUE)$exID |>
+  as.data.frame() |>
+  rownames_to_column(var = "exID") |>
+  mutate(exID = factor(exID)) |>
+  rename(theta_med = Estimate.Intercept,
+         theta_error = Est.Error.Intercept,
+         theta_Q2.5 = Q2.5.Intercept,
+         theta_Q97.5 = Q97.5.Intercept)
+
+# Ulery
+ulery_Nre_3cat_beta_est <- ranef(ulery_Nre_3cat_fit, robust = TRUE)$pairID |>
+  as.data.frame() |>
+  rownames_to_column(var = "pairID") |>
+  mutate(pairID = factor(pairID)) |>
+  rename(beta_med = Estimate.Intercept,
+         beta_error = Est.Error.Intercept,
+         beta_Q2.5 = Q2.5.Intercept,
+         beta_Q97.5 = Q97.5.Intercept)
+ulery_Nre_3cat_theta_est <- ranef(ulery_Nre_3cat_fit, robust = TRUE)$exID |>
+  as.data.frame() |>
+  rownames_to_column(var = "exID") |>
+  mutate(exID = factor(exID)) |>
+  rename(theta_med = Estimate.Intercept,
+         theta_error = Est.Error.Intercept,
+         theta_Q2.5 = Q2.5.Intercept,
+         theta_Q97.5 = Q97.5.Intercept)
+```
+
+#### 5-category, without random effects on exID
+
+```{r}
+# Busey
+busey_Nre_5cat_beta_est <- ranef(busey_Nre_5cat_fit, robust = TRUE)$pairID |>
+  as.data.frame() |>
+  rownames_to_column(var = "pairID") |>
+  mutate(pairID = factor(pairID)) |>
+  rename(beta_med = Estimate.Intercept,
+         beta_error = Est.Error.Intercept,
+         beta_Q2.5 = Q2.5.Intercept,
+         beta_Q97.5 = Q97.5.Intercept)
+busey_Nre_5cat_theta_est <- ranef(busey_Nre_5cat_fit, robust = TRUE)$exID |>
+  as.data.frame() |>
+  rownames_to_column(var = "exID") |>
+  rename(theta_med = Estimate.Intercept,
+         theta_error = Est.Error.Intercept,
+         theta_Q2.5 = Q2.5.Intercept,
+         theta_Q97.5 = Q97.5.Intercept)
+
+# Hicklin
+hicklin_Nre_5cat_beta_est <- ranef(hicklin_Nre_5cat_fit, robust = TRUE)$pairID |>
+  as.data.frame() |>
+  rownames_to_column(var = "pairID") |>
+  mutate(pairID = factor(pairID)) |>
+  rename(beta_med = Estimate.Intercept,
+         beta_error = Est.Error.Intercept,
+         beta_Q2.5 = Q2.5.Intercept,
+         beta_Q97.5 = Q97.5.Intercept)
+hicklin_Nre_5cat_theta_est <- ranef(hicklin_Nre_5cat_fit, robust = TRUE)$exID |>
+  as.data.frame() |>
+  rownames_to_column(var = "exID") |>
+  mutate(exID = factor(exID)) |>
+  rename(theta_med = Estimate.Intercept,
+         theta_error = Est.Error.Intercept,
+         theta_Q2.5 = Q2.5.Intercept,
+         theta_Q97.5 = Q97.5.Intercept)
+```
+
+### Extract posterior predictive probabilities for posterior predictive check
+
+#### 3-category, with random effects on exID
+
+```{r}
+num_draws = posterior::ndraws(busey_re_3cat_fit)
+busey_re_3cat_ppp <- 
+  predict(
+    busey_re_3cat_fit, 
+    robust = TRUE, 
+    summary = TRUE, 
+    ndraws = num_draws,
+    draw_ids = 1:num_draws,
+    re_formula = NULL,
+    allow_new_levels = FALSE,
+    seed = 78932
+    ) |> as.data.frame()
+#y_rep <- posterior_predict(busey_re_3cat_fit, seed = 43452)
+
+num_draws = posterior::ndraws(hicklin_re_3cat_fit)
+hicklin_re_3cat_ppp <- 
+  predict(
+    hicklin_re_3cat_fit, 
+    robust = TRUE, 
+    summary = TRUE, 
+    ndraws = num_draws,
+    draw_ids = 1:num_draws,
+    re_formula = NULL,
+    allow_new_levels = FALSE,
+    seed = 78932
+    ) |> as.data.frame()
+
+num_draws = posterior::ndraws(ulery_re_3cat_fit)
+ulery_re_3cat_ppp <- 
+  predict(
+    ulery_re_3cat_fit, 
+    robust = TRUE, 
+    summary = TRUE, 
+    ndraws = num_draws,
+    draw_ids = 1:num_draws,
+    re_formula = NULL,
+    allow_new_levels = FALSE,
+    seed = 78932
+    ) |> as.data.frame()
+```
+
+#### 5-category, with random effects on exID
+
+```{r}
+num_draws = posterior::ndraws(busey_re_5cat_fit)
+busey_re_5cat_ppp <- 
+  predict(
+    busey_re_5cat_fit, 
+    robust = TRUE, 
+    summary = TRUE, 
+    ndraws = num_draws,
+    draw_ids = 1:num_draws,
+    re_formula = NULL,
+    allow_new_levels = FALSE,
+    seed = 78932
+    ) |> as.data.frame()
+
+num_draws = posterior::ndraws(hicklin_re_5cat_fit)
+hicklin_re_5cat_ppp <- 
+  predict(
+    hicklin_re_5cat_fit, 
+    robust = TRUE, 
+    summary = TRUE, 
+    ndraws = num_draws,
+    draw_ids = 1:num_draws,
+    re_formula = NULL,
+    allow_new_levels = FALSE,
+    seed = 78932
+    ) |> as.data.frame()
+```
+
+#### 3-category, without random effects on exID
+
+```{r}
+num_draws = posterior::ndraws(busey_Nre_3cat_fit)
+busey_Nre_3cat_ppp <- 
+  predict(
+    busey_Nre_3cat_fit, 
+    robust = TRUE, 
+    summary = TRUE, 
+    ndraws = num_draws,
+    draw_ids = 1:num_draws,
+    re_formula = NULL,
+    allow_new_levels = FALSE,
+    seed = 78932
+    ) |> as.data.frame()
+#y_rep <- posterior_predict(busey_re_3cat_fit, seed = 43452)
+
+num_draws = posterior::ndraws(hicklin_Nre_3cat_fit)
+hicklin_Nre_3cat_ppp <- 
+  predict(
+    hicklin_Nre_3cat_fit, 
+    robust = TRUE, 
+    summary = TRUE, 
+    ndraws = num_draws,
+    draw_ids = 1:num_draws,
+    re_formula = NULL,
+    allow_new_levels = FALSE,
+    seed = 78932
+    ) |> as.data.frame()
+
+num_draws = posterior::ndraws(ulery_Nre_3cat_fit)
+ulery_Nre_3cat_ppp <- 
+  predict(
+    ulery_Nre_3cat_fit, 
+    robust = TRUE, 
+    summary = TRUE, 
+    ndraws = num_draws,
+    draw_ids = 1:num_draws,
+    re_formula = NULL,
+    allow_new_levels = FALSE,
+    seed = 78932
+    ) |> as.data.frame()
+```
+
+#### 5-category, without random effects on exID
+
+```{r}
+num_draws = posterior::ndraws(busey_Nre_5cat_fit)
+busey_Nre_5cat_ppp <- 
+  predict(
+    busey_Nre_5cat_fit, 
+    robust = TRUE, 
+    summary = TRUE, 
+    ndraws = num_draws,
+    draw_ids = 1:num_draws,
+    re_formula = NULL,
+    allow_new_levels = FALSE,
+    seed = 78932
+    ) |> as.data.frame()
+
+num_draws = posterior::ndraws(hicklin_Nre_5cat_fit)
+hicklin_Nre_5cat_ppp <- 
+  predict(
+    hicklin_Nre_5cat_fit, 
+    robust = TRUE, 
+    summary = TRUE, 
+    ndraws = num_draws,
+    draw_ids = 1:num_draws,
+    re_formula = NULL,
+    allow_new_levels = FALSE,
+    seed = 78932
+    ) |> as.data.frame()
+```
+
+### Data wrangling to join ppp data with original datasets
+
+#### 3-category, with random effects on exID
+
+##### Join posterior predictive probabilities
+
+```{r}
+busey_re_3cat_joined <- busey_re_3cat_ppp |>
+  rownames_to_column(var = "row_num") |>
+  mutate(row_num = factor(row_num)) |>
+  rename(ppp_excl = `P(Y = 1)`,
+         ppp_inc = `P(Y = 2)`,
+         ppp_id = `P(Y = 3)`) |>
+  left_join(busey_data, by = "row_num")
+
+hicklin_re_3cat_joined <- hicklin_re_3cat_ppp |>
+  rownames_to_column(var = "row_num") |>
+  mutate(row_num = factor(row_num)) |>
+  rename(ppp_excl = `P(Y = 1)`,
+         ppp_inc = `P(Y = 2)`,
+         ppp_id = `P(Y = 3)`) |>
+  left_join(hicklin_data, by = "row_num")
+
+ulery_re_3cat_joined <- ulery_re_3cat_ppp |>
+  rownames_to_column(var = "row_num") |>
+  mutate(row_num = factor(row_num)) |>
+  rename(ppp_excl = `P(Y = 1)`,
+         ppp_inc = `P(Y = 2)`,
+         ppp_id = `P(Y = 3)`) |>
+  left_join(ulery_data, by = "row_num")
+```
+
+##### Join parameter estimates
+
+```{r}
+busey_re_3cat_joined <- busey_re_3cat_joined |>
+  left_join(hicklin_re_3cat_beta_est, by = "pairID") |>
+  left_join(hicklin_re_3cat_theta_est, by = "exID")
+
+hicklin_re_3cat_joined <- hicklin_re_3cat_joined |>
+  left_join(hicklin_re_3cat_beta_est, by = "pairID") |>
+  left_join(hicklin_re_3cat_theta_est, by = "exID")
+
+ulery_re_3cat_joined <- ulery_re_3cat_joined |>
+  left_join(ulery_re_3cat_beta_est, by = "pairID") |>
+  left_join(ulery_re_3cat_theta_est, by = "exID")
+```
+
+#### 5-category, with random effects on exID
+
+##### Join posterior predictive probabilities
+
+```{r}
+busey_re_5cat_joined <- busey_re_5cat_ppp |>
+  rownames_to_column(var = "row_num") |>
+  mutate(row_num = factor(row_num)) |>
+  rename(ppp_excl = `P(Y = 1)`,
+         ppp_inc = `P(Y = 2)`,
+         ppp_id = `P(Y = 3)`) |>
+  left_join(busey_data, by = "row_num")
+
+hicklin_re_5cat_joined <- hicklin_re_5cat_ppp |>
+  rownames_to_column(var = "row_num") |>
+  mutate(row_num = factor(row_num)) |>
+  rename(ppp_excl = `P(Y = 1)`,
+         ppp_inc = `P(Y = 2)`,
+         ppp_id = `P(Y = 3)`) |>
+  left_join(hicklin_data, by = "row_num")
+```
+
+##### Join parameter estimates
+
+```{r}
+busey_re_5cat_joined <- busey_re_5cat_joined |>
+  left_join(hicklin_re_3cat_beta_est, by = "pairID") |>
+  left_join(hicklin_re_3cat_theta_est, by = "exID")
+
+hicklin_re_5cat_joined <- hicklin_re_5cat_joined |>
+  left_join(hicklin_re_3cat_beta_est, by = "pairID") |>
+  left_join(hicklin_re_3cat_theta_est, by = "exID")
+```
+
+#### 3-category, without random effects on exID
+
+##### Join posterior predictive probabilities
+
+```{r}
+busey_Nre_3cat_joined <- busey_Nre_3cat_ppp |>
+  rownames_to_column(var = "row_num") |>
+  mutate(row_num = factor(row_num)) |>
+  rename(ppp_excl = `P(Y = 1)`,
+         ppp_inc = `P(Y = 2)`,
+         ppp_id = `P(Y = 3)`) |>
+  left_join(busey_data, by = "row_num")
+
+hicklin_Nre_3cat_joined <- hicklin_Nre_3cat_ppp |>
+  rownames_to_column(var = "row_num") |>
+  mutate(row_num = factor(row_num)) |>
+  rename(ppp_excl = `P(Y = 1)`,
+         ppp_inc = `P(Y = 2)`,
+         ppp_id = `P(Y = 3)`) |>
+  left_join(hicklin_data, by = "row_num")
+
+ulery_Nre_3cat_joined <- ulery_Nre_3cat_ppp |>
+  rownames_to_column(var = "row_num") |>
+  mutate(row_num = factor(row_num)) |>
+  rename(ppp_excl = `P(Y = 1)`,
+         ppp_inc = `P(Y = 2)`,
+         ppp_id = `P(Y = 3)`) |>
+  left_join(ulery_data, by = "row_num")
+```
+
+##### Join parameter estimates
+
+```{r}
+busey_Nre_3cat_joined <- busey_Nre_3cat_joined |>
+  left_join(hicklin_Nre_3cat_beta_est, by = "pairID") |>
+  left_join(hicklin_Nre_3cat_theta_est, by = "exID")
+
+hicklin_Nre_3cat_joined <- hicklin_Nre_3cat_joined |>
+  left_join(hicklin_Nre_3cat_beta_est, by = "pairID") |>
+  left_join(hicklin_Nre_3cat_theta_est, by = "exID")
+
+ulery_Nre_3cat_joined <- ulery_Nre_3cat_joined |>
+  left_join(ulery_Nre_3cat_beta_est, by = "pairID") |>
+  left_join(ulery_Nre_3cat_theta_est, by = "exID")
+```
+
+#### 5-category, without random effects on exID
+
+##### Join posterior predictive probabilities
+
+```{r}
+busey_Nre_5cat_joined <- busey_Nre_5cat_ppp |>
+  rownames_to_column(var = "row_num") |>
+  mutate(row_num = factor(row_num)) |>
+  rename(ppp_excl = `P(Y = 1)`,
+         ppp_inc = `P(Y = 2)`,
+         ppp_id = `P(Y = 3)`) |>
+  left_join(busey_data, by = "row_num")
+
+hicklin_Nre_5cat_joined <- hicklin_Nre_5cat_ppp |>
+  rownames_to_column(var = "row_num") |>
+  mutate(row_num = factor(row_num)) |>
+  rename(ppp_excl = `P(Y = 1)`,
+         ppp_inc = `P(Y = 2)`,
+         ppp_id = `P(Y = 3)`) |>
+  left_join(hicklin_data, by = "row_num")
+```
+
+##### Join parameter estimates
+
+```{r}
+busey_Nre_5cat_joined <- busey_Nre_5cat_joined |>
+  left_join(hicklin_Nre_3cat_beta_est, by = "pairID") |>
+  left_join(hicklin_Nre_3cat_theta_est, by = "exID")
+
+hicklin_Nre_5cat_joined <- hicklin_Nre_5cat_joined |>
+  left_join(hicklin_Nre_3cat_beta_est, by = "pairID") |>
+  left_join(hicklin_Nre_3cat_theta_est, by = "exID")
+```
+
+### Posterior predictive probability plots 
+
+```{r}
+df_ex100_29_46 <- hicklin_re_3cat_joined |>
+  filter(exID %in% c("100", "29", "46")) |>
+  pivot_longer(cols = starts_with("prob_"),
+               names_to = "category",
+               values_to = "prob") |>
+  mutate(category = factor(category, levels = c("prob_id", "prob_inc", "prob_excl")),
+         exID = factor(exID, levels = c("30", "68", "23"))) |>
+  group_by(exID, pairID) |>
+  mutate(prob_id_this_resp = prob[category == "prob_id"][1]) |>
+  ungroup() |>
+  group_by(exID) |>
+  mutate(pairID_reordered = fct_reorder(factor(pairID), prob_id_this_resp, .desc = FALSE)) |>
+  ungroup() |>
+  mutate(pairID_faceted = reorder_within(pairID, prob_id_this_resp, exID))
+  
+
+ggplot(df_ex100_29_46, aes(x = prob, y = pairID_faceted, fill = category)) +
+  geom_col() +
+  facet_wrap(~ exID, scales = "free_y", drop = TRUE) +
+  scale_y_reordered() +
+  scale_fill_manual(values = c(prob_excl = "#d1495b",
+                               prob_inc = "#E69F00",
+                               prob_id = "#66a182"),
+                    labels = c("P(Identification)", 
+                               "P(Inconclusive)",
+                               "P(Exclusion)")) +
+  labs(x = "Posterior Predictive Probabilities", y = "Pair ID", fill = "Category") +
+  theme(text = element_text(family = "atkinson"),
+        axis.title = element_text(family = "atkinson"), 
+        axis.text = element_text(family = "atkinson"), 
+        strip.text = element_text(family = "atkinson"),
+        legend.text = element_text(family = "atkinson"),
+        legend.title = element_text(family = "atkinson")) +
+  theme_minimal()
+```
