@@ -31,7 +31,7 @@ All information in the data sets is described below—this includes things like 
 ### Data set information:
 
 | Data Set, with links to the original paper | Number of Examiners | Number of Item Pairs | Number of Responses | Additional info |
-|---------------|---------------|---------------|---------------|---------------|
+|----|----|----|----|----|
 | [Hicklin](https://www.sciencedirect.com/science/article/pii/S0379073825000957#bib22) (2025) fingerprints | 156 | 300 | 14,224 | **base data set for results in our paper** |
 | [Ulery](https://www.pnas.org/doi/10.1073/pnas.1018707108) (2011) fingerprints | 169 | 744 | 17,121 | **also used in our paper**; only 3 level conclusion scale; no value decision column |
 | [Busey](https://www.sciencedirect.com/science/article/pii/S0379073822003735) (2022) fingerprints | 74 | 60 | 4,190 | no value decision column |

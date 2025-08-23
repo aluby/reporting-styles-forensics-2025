@@ -1,0 +1,1409 @@
+---
+title: "Josh Notebook"
+format: html
+---
+
+
+
+# Load packages
+
+
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(bayesplot)
+library(rstanarm)
+library(rstan)
+library(plotly)
+library(tidyr)
+library(tidyverse)
+library(brms)
+```
+
+
+
+# Data presentation work
+
+
+
+```{r}
+# Only keeps relevant columns
+Palm_Results <- Results %>%
+  select(username, exercise, mark_value, comparison_decision, GT, GT_a, GT_c, Conclusion_GT, Conclusion_a, Conclusion_GTc)
+
+# Remove NA and Inconclusive decisions and add columns tagging FP/FN using standard definitions
+Palm_Results_clean <- Palm_Results %>%
+  filter(!is.na(comparison_decision),
+         comparison_decision != "Inconclusive") %>%
+  mutate(
+    # False Positives: ID made on Different sources (false ID)
+    is_fp = GT == "Different sources" & comparison_decision == "Identification",
+    # False Negatives: Exclusion made on Same source (missed ID)
+    is_fn = GT == "Same source" & comparison_decision == "Exclusion",
+    same_source_trial = GT == "Same source",
+    diff_source_trial = GT == "Different sources"
+  )
+# Compute FPR and FNR
+Palm_Results_clean %>%
+  summarise(
+    False_pos_rate = sum(is_fp) / sum(diff_source_trial),
+    False_neg_rate = sum(is_fn) / sum(same_source_trial)
+  )
+```
+
+```{r}
+Palm_Results_clean <- Palm_Results %>%
+  filter(!is.na(comparison_decision),
+         comparison_decision != "Inconclusive")
+
+summary_table <- Palm_Results_clean %>%
+  group_by(GT, comparison_decision) %>%
+  tally() %>%
+  tidyr::pivot_wider(names_from = comparison_decision, values_from = n, values_fill = 0)
+
+print(summary_table)
+
+```
+
+```{r}
+Palm_Results_Prop <- Palm_Results %>%
+  filter(!is.na(comparison_decision)) %>%
+  count(username, comparison_decision) %>%
+  group_by(username) %>%
+  mutate(prop = n / sum(n))
+
+ggplot(Palm_Results_Prop, aes(x = username, y = prop, fill = comparison_decision)) +
+  geom_col() +
+  labs(
+    title = "Proportion of Decisions by Examiner",
+    x = "Examiner",
+    y = "Proportion of Responses",
+    fill = "Decision Type"
+  )
+
+```
+
+
+
+# Data by examiners and items
+
+examiners:
+
+#responses
+
+#fp
+
+#fn
+
+%nv
+
+%inconclusive
+
+%mated
+
+
+
+```{r}
+Palm_Results_Examiner <- Palm_Results %>%
+  mutate(
+    is_fp = GT == "Different sources" & comparison_decision == "Identification",
+    is_fn = GT == "Same source" & comparison_decision == "Exclusion",
+    is_inconclusive = comparison_decision == "Inconclusive",
+    is_no_value = comparison_decision == "No Value",
+    is_mated = GT == "Same source"
+  )
+Palm_Results_Examiner <- Palm_Results_Examiner %>%
+  group_by(username) %>%
+  summarize(
+    False_Positives = sum(is_fp, na.rm = TRUE),
+    False_Negatives = sum(is_fn, na.rm = TRUE),
+    Percent_No_Value = mean(is_no_value, na.rm = TRUE) * 100,
+    Percent_Inconclusive = mean(is_inconclusive, na.rm = TRUE) * 100,
+    Percent_Mated = mean(is_mated, na.rm = TRUE) * 100,
+    Responses = n()
+  )
+```
+
+
+
+items:
+
+mated
+
+
+
+```{r}
+Palm_Results_Items <- Palm_Results %>%
+  group_by(exercise) %>%
+  summarise(
+    GT = first(GT),
+    Total_Responses = n(),
+    Num_No_Value = sum(mark_value == "No value", na.rm = TRUE),
+    Num_Inconclusive = sum(comparison_decision == "Inconclusive", na.rm = TRUE),
+    Num_ID = sum(comparison_decision == "Identification", na.rm = TRUE),
+    Num_Exclusion = sum(comparison_decision == "Exclusion", na.rm = TRUE),
+    Num_FP = sum(GT == "Different sources" & comparison_decision == "Identification", na.rm = TRUE),
+    Num_FN = sum(GT == "Same source" & comparison_decision == "Exclusion", na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    Percent_No_Value = Num_No_Value / Total_Responses * 100,
+    Percent_Inconclusive = Num_Inconclusive / Total_Responses * 100,
+    Percent_ID = Num_ID / Total_Responses * 100,
+    Percent_Exclusion = Num_Exclusion / Total_Responses * 100,
+    FP_Rate = Num_FP / Total_Responses * 100,
+    FN_Rate = Num_FN / Total_Responses * 100,
+    Is_Mated = GT == "Same source"
+  )
+```
+
+
+
+# OSF data
+
+
+
+```{r}
+results2.csv <- read.delim("~/Desktop/OSFSiteData/results2.csv", header = TRUE, sep = ";")
+```
+
+```{r}
+table(results2.csv$decision)
+
+results2.csv %>%
+  filter(userid == 107)
+```
+
+
+
+# Probit regression models
+
+
+
+```{r}
+busey_response_scale_3 <- results2.csv %>%
+  filter(condition == 3) %>%
+  mutate(decision_cat = case_when(
+    decision == 0 ~ "exclude",
+    decision == 2 ~ "inconclusive",
+    decision == 4 ~ "ID"
+  ))
+
+busey_response_scale_3$decision_cat <- ordered(
+  busey_response_scale_3$decision_cat,
+  levels = c("exclude", "inconclusive", "ID")
+)
+
+model1 <- stan_polr(decision_cat ~ rt, data = busey_response_scale_3,
+                   prior = NULL,
+                   method = "probit",
+                   seed = 1013)
+
+print(model1, digits = 1)
+posterior_interval(model1, prob = 0.9)
+plot(model1)
+plot(model1, plotfun = "dens")
+plot(model1, plotfun = "areas")
+
+busey_response_scale_3$stimid <- as.factor(busey_response_scale_3$stimid)
+
+
+model2 <- stan_polr(decision_cat ~ stimid, data = busey_response_scale_3,
+                   prior = NULL,
+                   method = "probit", 
+                   seed = 1013)
+
+print(model2)
+posterior_interval(model2, prob = 0.9)
+plot(model2)
+plot(model2, plotfun = "dens")
+plot(model2, plotfun = "areas")
+```
+
+
+
+notes 7/7:
+
+-   these numbers are meaningless
+
+    -   pos and neg don't really say anything
+
+    -   Order and magnitude matter, so like more negative or more positive but yeah
+
+    -   Normal distributions can be altered, still same thing
+
+        -   Stretch it out, scrunch it up, shift it - all possible and valid
+
+-   Each pair ID gets a different distribution on the latent scale, but cutpoints remain the same for all
+
+    -   All normal distributions (maybe uniform because of NULL
+
+-   What is MCMC doing?
+
+    -   A way to get an estimate for the posterior computationally
+
+    -   Gives random sample from posterior
+
+-   Data:
+
+    -   x1, ..., xn \~ N(µ, 1)
+
+-   Frequentist:
+
+    -   x_bar \~ N(µ, 1/n\^2)
+
+    -   95% CI for µ: x_bar ± 2 \* 1/n
+
+-   Bayesian:
+
+    -   Prior: µ \~ N(0,1)
+
+    -   Data (same): x\|µ \~ N(µ, 1)
+
+    -   Posterior: µ\|X \~ N( (1 ∑xi)/1+n, (1/(1+n)\^2))
+
+[Next steps:]{.underline}
+
+-   "Pure" stan version of the model
+
+    -   More control over priors
+
+    -   Replicate Busey model exactly
+
+        -   If we can't figure out how to run their code
+
+-   Extract posterior samples from stanarm models
+
+-   Write up model (like what you'd see in a paper)
+
+    -   Are there assumptions for ordinal probit?
+
+-   **Join estimates to data; create tables replicating Busey tables**
+
+    -   Argue with graphs whether our model or Busey model is better
+
+-   Fit ordinal probit on other data
+
+-   Speed up stan fitting
+
+# 7/7 work w/ Ximena
+
+## Join estimates to data, create tables replicating Busey tables
+
+
+
+```{r}
+model2 <- stan_polr(decision_cat ~ stimid, data = busey_response_scale_3,
+                   prior = NULL,
+                   method = "probit", 
+                   seed = 1013)
+```
+
+```{r}
+#replicate busey table for traditional scale
+
+busey_response_traditional <- results2.csv %>%
+  filter(condition == 3) %>%
+  mutate(decision_cat = case_when(
+    decision == 0 ~ "exclude",
+    decision == 2 ~ "inconclusive",
+    decision == 4 ~ "ID"
+  ))
+
+busey_response_traditional$decision_cat <- ordered(
+  busey_response_traditional$decision_cat,
+  levels = c("exclude", "inconclusive", "ID")
+)
+
+counts_busey_traditional <- busey_response_traditional %>%
+  group_by(stimid) %>%
+  summarize(
+    Exc = sum(valuedecision != 0 & decision_cat == "exclude"),
+    Inc = sum(valuedecision != 0 & decision_cat == "inconclusive"),
+    ID = sum(valuedecision != 0 & decision_cat == "ID"),
+    NV = sum(valuedecision == "0")
+    )
+
+all_stimids <- data.frame(stimid = 1:60)
+
+estimates_busey_traditional <- cbind(Median = coef(model2), MAD_SD = se(model2)) %>%
+  as.data.frame()
+
+rownames(estimates_busey_traditional) <- sub("stimid", "", rownames(estimates_busey_traditional))
+
+estimates_busey_traditional$stimid <- as.numeric(rownames(estimates_busey_traditional))
+
+estimates_busey_traditional <- all_stimids %>%
+  left_join(estimates_busey_traditional, by = "stimid")
+
+busey_table_traditional <- estimates_busey_traditional %>%
+  left_join(counts_busey_traditional, by = "stimid")
+```
+
+```{r}
+#replicate busey table for expanded traditional scale
+
+busey_response_expanded <- results2.csv %>%
+  filter(conclusionType == 0) %>%
+  filter(condition == 5) %>%
+  mutate(decision_cat = case_when(
+    decision == 0 ~ "exclude",
+    decision == 1 ~ "SDS",
+    decision == 2 ~ "inconclusive",
+    decision == 3 ~ "SCS",
+    decision == 4 ~ "ID"
+  ))
+
+busey_response_expanded$decision_cat <- ordered(
+  busey_response_expanded$decision_cat,
+  levels = c("exclude", "SDS", "inconclusive", "SCS", "ID")
+)
+
+counts_busey_expanded <- busey_response_expanded %>%
+  group_by(stimid) %>%
+  summarize(
+    Exc = sum(valuedecision != 0 & decision_cat == "exclude"),
+    SDS = sum(valuedecision != 0 & decision_cat == "SDS"),
+    Inc = sum(valuedecision != 0 & decision_cat == "inconclusive"),
+    SCS = sum(valuedecision != 0 & decision_cat == "SCS"),
+    ID = sum(valuedecision != 0 & decision_cat == "ID"),
+    NV = sum(valuedecision == "0")
+    )
+
+estimates_busey_expanded <- cbind(Median = coef(model2), MAD_SD = se(model2)) %>%
+  as.data.frame()
+
+rownames(estimates_busey_expanded) <- sub("stimid", "", rownames(estimates_busey_expanded))
+
+estimates_busey_expanded$stimid <- as.numeric(rownames(estimates_busey_expanded))
+
+estimates_busey_expanded <- all_stimids %>%
+  left_join(estimates_busey_expanded, by = "stimid")
+
+busey_table_expanded <- estimates_busey_expanded %>%
+  left_join(counts_busey_expanded, by = "stimid")
+```
+
+```{r}
+#replicate busey table for SOS scale
+
+busey_response_sos <- results2.csv %>%
+  filter(conclusionType == 1) %>%
+  filter(condition == 5) %>%
+  mutate(decision_cat = case_when(
+    decision == 0 ~ "ESSDS",
+    decision == 1 ~ "SDS",
+    decision == 2 ~ "inconclusive",
+    decision == 3 ~ "SCS",
+    decision == 4 ~ "ESSCS"
+  ))
+
+busey_response_sos$decision_cat <- ordered(
+  busey_response_sos$decision_cat,
+  levels = c("ESSDS", "SDS", "inconclusive", "SCS", "ESSCS")
+)
+
+counts_busey_sos <- busey_response_sos %>%
+  group_by(stimid) %>%
+  summarize(
+    Exc = sum(valuedecision != 0 & decision_cat == "ESSDS"),
+    SDS = sum(valuedecision != 0 & decision_cat == "SDS"),
+    Inc = sum(valuedecision != 0 & decision_cat == "inconclusive"),
+    SCS = sum(valuedecision != 0 & decision_cat == "SCS"),
+    ID = sum(valuedecision != 0 & decision_cat == "ESSCS"),
+    NV = sum(valuedecision == "0")
+    )
+
+estimates_busey_sos <- cbind(Median = coef(model2), MAD_SD = se(model2)) %>%
+  as.data.frame()
+
+rownames(estimates_busey_sos) <- sub("stimid", "", rownames(estimates_busey_sos))
+
+estimates_busey_sos$stimid <- as.numeric(rownames(estimates_busey_sos))
+
+estimates_busey_sos <- all_stimids %>%
+  left_join(estimates_busey_sos, by = "stimid")
+
+busey_table_sos <- estimates_busey_sos %>%
+  left_join(counts_busey_sos, by = "stimid")
+```
+
+```{r}
+#compare our estimates to Busey's Table 1 estimates
+
+table_values_text <- "
+pairID mu sigma LR Ex Inc ID NV EX SDS Inc SCS ID NV ESSDS SDS Inc SCS ESSCS NV
+43 -4.45 3.17 0.01 40 0 1 0 12 0 0 0 0 0 17 0 1 0 0 0
+35 -4.09 1.12 0.01 37 0 0 0 18 0 0 0 0 0 16 0 0 0 0 0
+51 -2.64 1.65 0.02 29 0 0 0 19 1 0 0 0 0 22 0 0 0 0 0
+29 -2.52 1.63 0.02 36 0 0 0 11 1 0 0 0 0 20 0 0 0 0 0
+57 -2.17 1.94 0.02 34 1 0 0 18 0 0 0 0 0 15 1 1 0 0 0
+55 -1.88 1.29 0.03 38 0 0 0 17 0 0 0 0 0 16 1 0 0 0 0
+11 -1.48 1.81 0.03 29 2 0 1 18 0 0 0 0 0 14 2 1 0 0 0
+17 0.62 2.15 0.12 20 12 1 5 8 2 2 1 0 1 9 4 1 2 0 2
+59 0.78 1.63 0.14 22 6 1 0 10 5 2 0 1 0 5 13 1 1 0 0
+53 0.79 1.59 0.14 18 9 0 7 7 2 1 1 0 6 6 7 2 1 0 3
+5 0.85 1.46 0.15 24 6 1 0 13 2 3 0 0 0 3 8 8 0 0 0
+3 0.87 1.09 0.15 18 7 0 5 8 6 2 0 0 3 7 6 3 0 0 2
+7 1.20 0.96 0.22 4 3 0 29 2 3 0 0 0 14 1 2 1 0 0 9
+37 1.22 0.82 0.22 25 8 0 4 1 7 3 0 0 2 3 7 4 0 0 6
+25 1.24 1.42 0.23 20 14 0 0 5 2 10 1 0 0 8 6 3 0 0 0
+1 1.26 1.61 0.23 18 8 0 0 9 4 5 2 1 0 5 9 8 1 0 0
+13 1.32 0.65 0.25 5 2 0 24 3 3 0 0 0 11 0 6 3 0 0 14
+31 1.33 1.39 0.25 14 16 0 1 5 5 8 0 0 1 11 2 7 0 0 1
+9 1.36 1.15 0.26 18 21 0 0 5 2 4 0 0 1 6 8 4 0 0 0
+41 1.40 1.31 0.28 18 16 0 0 7 5 7 0 0 0 6 4 7 1 0 0
+19 1.51 0.75 0.32 12 14 0 17 1 4 1 0 0 8 1 5 2 0 0 4
+23 1.61 0.69 0.36 8 22 0 11 6 5 0 0 0 5 0 6 3 0 0 4
+49 1.68 1.35 0.39 16 14 0 0 4 4 9 0 0 1 4 5 11 0 1 0
+45 1.82 1.01 0.46 9 20 0 7 6 2 3 0 0 6 1 3 10 0 0 5
+47 1.87 0.95 0.49 7 23 0 1 3 9 5 0 0 0 4 8 12 1 0 0
+21 1.90 0.94 0.51 13 26 0 0 3 5 8 0 0 2 2 2 9 0 0 0
+38 2.30 0.68 0.79 2 20 0 15 1 1 9 0 0 9 0 3 7 0 0 7
+2 2.38 1.05 0.86 7 20 0 13 1 3 6 1 0 5 0 0 5 2 0 9
+15 2.40 0.69 0.87 2 27 0 8 0 0 13 0 0 2 1 4 11 0 0 3
+39 2.42 0.93 0.89 1 4 0 30 0 0 1 0 0 15 0 0 2 0 0 17
+22 2.46 0.63 0.92 0 16 0 11 2 1 11 0 0 5 0 1 14 0 0 8
+10 2.46 0.67 0.92 2 32 0 1 1 2 9 0 0 1 0 3 19 1 0 1
+33 2.66 0.89 1.11 2 27 0 9 0 4 8 3 0 2 0 3 6 2 0 5
+56 2.70 0.99 1.14 4 24 0 7 0 4 7 4 0 3 0 3 10 4 0 1
+50 2.85 1.10 1.30 2 11 1 18 1 1 4 2 0 10 0 0 8 2 0 12
+12 2.93 1.41 1.39 3 20 5 1 1 3 7 5 2 1 1 5 11 2 0 0
+27 3.02 1.50 1.50 0 1 0 38 0 0 0 0 0 14 0 0 0 0 0 14
+24 3.24 1.11 1.83 1 10 2 15 1 0 8 4 0 7 0 1 7 6 0 8
+44 3.43 1.47 2.19 2 20 5 6 1 1 4 8 1 2 0 4 6 6 2 2
+6 3.54 0.82 2.43 0 35 3 4 0 0 5 7 0 1 0 0 8 3 1 3
+26 3.54 1.32 2.44 2 21 8 3 0 1 7 3 1 2 0 2 8 9 1 0
+48 3.64 1.14 2.71 0 26 4 4 1 2 5 11 1 1 0 0 7 7 2 2
+40 3.99 1.66 3.94 3 20 13 0 1 2 3 7 3 0 0 2 1 13 2 0
+46 4.02 1.14 4.06 2 20 9 1 0 1 2 12 3 1 0 0 4 14 0 0
+60 4.34 1.87 5.83 2 15 14 3 1 0 3 5 6 3 0 2 2 7 2 4
+14 4.38 4.01 6.10 7 7 16 0 5 0 3 2 12 0 3 4 2 4 4 0
+34 4.59 2.18 7.71 3 15 28 0 0 1 4 2 6 0 0 3 5 3 1 0
+32 5.37 2.28 18 1 8 16 10 0 1 0 1 5 5 0 1 3 5 6 5
+28 6.06 1.98 44 0 6 23 6 0 1 2 1 11 1 0 0 1 7 9 2
+52 6.47 2.28 78 1 6 22 3 0 1 0 4 11 2 0 0 0 5 13 0
+30 6.93 1.68 160 0 2 30 1 0 0 1 1 16 0 0 0 0 5 13 0
+16 7.24 2.57 267 0 6 30 4 0 0 0 0 10 0 1 0 0 5 12 0
+54 7.73 2.80 643 0 7 33 1 0 1 0 0 13 4 0 0 1 0 9 0
+4 8.23 3.05 1649 2 3 34 0 0 0 0 1 17 1 0 0 0 3 9 0
+36 8.45 3.13 2543 0 3 32 0 0 1 0 1 12 0 1 0 0 3 17 0
+58 8.94 4.76 7110 2 2 36 0 1 2 0 1 12 0 2 0 1 1 11 0
+18 9.38 2.33 17628 0 0 35 0 0 0 0 1 16 0 0 0 1 0 19 0
+8 9.75 3.34 38689 0 0 21 0 1 1 0 1 22 0 0 0 0 2 21 0
+42 10.24 4.75 103527 4 0 31 1 0 0 1 0 14 0 0 1 0 1 15 0
+20 10.30 1.13 117647 0 0 37 0 0 0 0 0 16 0 0 0 0 0 17 0
+"
+
+table1 <- read.table(text = table_values_text, header = TRUE, stringsAsFactors = FALSE)
+
+estimates_table1 <- table1 %>%
+  select(pairID, mu, sigma)
+
+estimates_table1 <- estimates_table1 %>%
+  rename(stimid = pairID)
+
+compare_estimates <- estimates_table1 %>%
+  left_join(estimates_busey_traditional, by = "stimid")
+
+compare_estimates <- compare_estimates %>%
+  mutate(mated = if_else(stimid %% 2 == 0, "1", "0"))
+
+avg_compare <- ggplot(compare_estimates) +
+  aes(x = mu, y = Median, color = mated, label = stimid) +
+  geom_point() 
+
+sd_compare <- ggplot(compare_estimates) +
+  aes(x = sigma, y = MAD_SD, color = mated) +
+  geom_point()
+
+ggplotly(avg_compare, tooltip = c("stimid", "mu", "Median"))
+```
+
+
+
+# Fit Rasch Models
+
+Fit the Rasch model to the Busey data using (1) lme4::glmer() (2) rstanarm::stan_glmer() and (3) the stan code provided by me and compare results  (e.g. are the item estimates the same? Are they correlated? Are the P(Correct) for each response the same under the 3 models?)
+
+
+
+```{r}
+#setup
+busey_traditional_for_model <- busey_response_traditional %>%
+  mutate(mated = if_else(stimid %% 2 == 0, "1", "0"))
+
+busey_traditional_for_model <- busey_traditional_for_model %>%
+  mutate(
+    correct = ifelse(decision == 0 & mated == 0 | decision == 4 & mated == 1, 1 , 0) # counts inconclusive as incorrect
+  )
+```
+
+
+
+## lme4::glmer()
+
+
+
+```{r}
+irt_mod <- lme4::glmer(correct ~ -1 + (1| userid) + (1|stimid), 
+                       data = busey_traditional_for_model, 
+                       family = "binomial")
+```
+
+
+
+## rstanarm::stan_glmer()
+
+
+
+```{r}
+irt_bayes <- stan_glmer(correct ~ -1 + (1| userid) + (1|stimid), 
+                       data = busey_traditional_for_model, 
+                       prior = normal(0, 1),
+                       family = "binomial")
+```
+
+
+
+## stan code from Amanda
+
+
+
+```{r}
+irt_stan_busey_traditional <- paste0(
+"data {
+  int<lower=1> I;               // # examiners
+  int<lower=1> J;               // # image pairs
+  int<lower=1> N;               // # total responses
+  int<lower=1, upper=I> ii[N];  // examiner index
+  int<lower=1, upper=J> jj[N];  // image pair index
+  int<lower=0, upper=1> y[N];   // response for n; y = 0 (incorrect), 1 (correct)
+}
+parameters {
+  vector[J] b;              // difficulty for image pair j
+  vector[I] theta;          // proficiency for examiner i
+  real mu_b;                 // mean of difficulties
+  real<lower=0> sigmaB;     // variance of difficulties
+  real<lower=0> sigmaT;     // variance of proficiencies
+}
+model {
+  vector[N] eta;
+  b ~ normal(mu_b, sigmaB);
+  theta ~ normal(0, sigmaT);
+  y ~ bernoulli_logit(theta[ii] - b[jj]);
+  mu_b ~ normal(0,10);
+  sigmaT ~ cauchy(0, 2.5);
+  sigmaB ~ cauchy(0, 2.5);
+}
+")
+
+irt_stan_busey_traditional_list = list(
+  y = busey_traditional_for_model$correct[!is.na(busey_traditional_for_model$correct)],
+  ii = as.integer(factor(busey_traditional_for_model$userid)),
+  jj = as.integer(factor(busey_traditional_for_model$stimid)),
+  I = length(unique(busey_traditional_for_model$userid)),
+  J = length(unique(busey_traditional_for_model$stimid)),
+  N = length(busey_traditional_for_model$correct[!is.na(busey_traditional_for_model$correct)])
+)
+
+stan_rasch <- stan(model_code = irt_stan_busey_traditional, data = irt_stan_busey_traditional_list,
+                       iter = 4000, chains = 4)
+```
+
+
+
+## Compare results
+
+(e.g. are the item estimates the same? Are they correlated? Are the P(Correct) for each response the same under the 3 models?)
+
+
+
+```{r}
+#get item estimates from each model
+item_lme4 <- ranef(irt_mod)$stimid[, 1]
+
+item_bayes <- ranef(irt_bayes)$stimid[, 1]
+
+posterior_draws <- extract(stan_rasch)
+item_stan <- colMeans(posterior_draws$b)
+```
+
+```{r}
+all_stimids <- sort(unique(busey_traditional_for_model$stimid))  # numeric vector of 60 stimids
+
+item_estimates <- data.frame(
+  stimid = all_stimids,
+  lme4 = item_lme4,
+  rstanarm = item_bayes,
+  stan = item_stan
+)
+
+#corrleation matrix of estimates for each model. had to flip sign on custom model bc how the others coded difficulty
+item_estimates$stan_flipped <- -1 * item_estimates$stan
+cor(item_estimates[, c("lme4", "rstanarm", "stan_flipped")])
+
+
+#graphs estimates for each stimid by model - easy to tell how close they are together
+item_estimates_long <- pivot_longer(
+  item_estimates,
+  cols = c("lme4", "rstanarm", "stan_flipped"),
+  names_to = "model",
+  values_to = "estimate"
+)
+
+# Default ggplot colors
+default_colors <- c("#F8766D", "#00BFC4", "#7CAE00")
+
+ggplot(item_estimates_long, aes(x = stimid, y = estimate, color = model)) +
+  geom_line() +
+  geom_point() +
+  theme_minimal() +
+  labs(title = "Item difficulty estimates by model",
+       y = "Estimated difficulty",
+       x = "Stim ID") +
+  scale_color_manual(
+    values = c("lme4" = default_colors[1],
+               "rstanarm" = default_colors[3],
+               "stan_flipped" = default_colors[2]),
+    labels = c("lme4" = "lme4",
+               "rstanarm" = "rstanarm",
+               "stan_flipped" = "stan")
+  )
+```
+
+
+
+# Week 3
+
+\*see Simulation.R
+
+# Week 5
+
+
+
+```{r}
+#Hicklin2025_ComparisonResponses <- read.csv("~/Downloads/Hicklin2025_ComparisonResponses.csv")
+#Hicklin2025_ComparisonResponses[Hicklin2025_ComparisonResponses == ""] <- NA
+
+Hicklin_mutated <- read.csv("~/Downloads/Hicklin_mutated.csv")
+```
+
+
+
+hist(Hicklin_mutated\$response5)
+
+
+
+```{r}
+
+length(unique(Hicklin_mutated$exID))
+#156 examiners
+
+length(unique(Hicklin_mutated$pairID))
+#300 pairs
+
+hist(Hicklin_mutated$response3)
+hist(Hicklin_mutated$response5)
+
+Hicklin_mutated |> 
+  filter(!is.na(response3)) |>
+  count(response3) |>
+  mutate(prop = n / sum(n))
+
+
+Hicklin_mutated |> 
+  filter(!is.na(response5)) |>
+  count(response5) |>
+  mutate(prop = n / sum(n))
+
+```
+
+
+
+# Week 6
+
+
+
+```{r}
+#5-6 min ish
+brm_busey3 <- brm(
+  formula = response3 ~ (1 | exID) + (1 | pairID),
+  data = busey,
+  family = cumulative(probit),
+  chains = 4,
+  iter = 2000,
+  seed = 0825
+)
+```
+
+```{r}
+ranefs_busey3 <- ranef(brm_busey3)
+
+full_grid <- expand_grid(
+    exID = 1:74,
+    pairID = 1:60)
+
+ex_summary_busey3 <- as_tibble(ranefs_busey3$exID[, , "Intercept"], rownames = "exID") |>
+  mutate(exID = as.integer(exID)) |>
+  select(exID, Estimate, Q2.5, Q97.5) |>
+  rename(
+    theta_estimate = Estimate,
+    theta_lower = Q2.5,
+    theta_upper = Q97.5
+  ) |> 
+  mutate(contains_0 = theta_lower <= 0 & theta_upper >= 0)
+
+pair_summary_busey3 <- as_tibble(ranefs_busey3$pairID[, , "Intercept"], rownames = "pairID") |>
+  mutate(pairID = as.integer(pairID)) |>
+  select(pairID, Estimate, Q2.5, Q97.5) |>
+  rename(
+    beta_estimate = Estimate,
+    beta_lower = Q2.5,
+    beta_upper = Q97.5
+  )
+
+full_summary_busey3 <- full_grid |>
+  left_join(ex_summary_busey3, by = "exID") |>
+  left_join(pair_summary_busey3, by = "pairID")
+
+items_busey3 <- ggplot(full_summary_busey3, aes(x = pairID, y = beta_estimate)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = beta_lower, ymax = beta_upper)) +
+  labs(
+    title = "Item estimates Busey 3 cat"
+  )
+
+ggplotly(items_busey3)
+
+ex_busey3 <- ggplot(full_summary_busey3, aes(x = exID, y = theta_estimate, color = contains_0)) +
+  geom_point()+
+  geom_errorbar(aes(ymin = theta_lower, ymax = theta_upper)) +
+  scale_color_manual(values = c(`TRUE` = "darkgray", `FALSE` = "blue")) +
+  labs(
+    title = "Examiner estimates Busey 3 cat"
+  )
+
+ggplotly(ex_busey3)
+
+mean(full_summary_busey3$contains_0)
+```
+
+```{r}
+response_summary <- busey |>
+  group_by(exID, response3) |>
+  summarize(n = n(), .groups = "drop") |>
+  group_by(exID) |>
+  mutate(pct = n / sum(n))
+
+response_summary_with_theta <- response_summary |>
+  left_join(ex_summary_busey3, by = "exID")
+
+ggplot(response_summary_with_theta, aes(x = as.factor(response3), y = pct, fill = as.factor(response3))) +
+  geom_col() +
+  facet_wrap(~ fct_reorder(as.factor(exID), theta_estimate), nrow = 6) +
+  scale_fill_manual(values = c("Exclude" = "skyblue", "Inconclusive" = "gray70", "Identification" = "firebrick")) +
+  labs(x = "Response Category", y = "Proportion", title = "Response breakdown per examiner (ordered by θ)") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+response_summary <- busey |>
+  group_by(exID, response3) |>
+  summarize(n = n(), .groups = "drop") |>
+  group_by(exID) |>
+  mutate(pct = n / sum(n))
+
+response_summary_with_theta <- response_summary |>
+  left_join(ex_summary_busey3, by = "exID") |>
+  mutate(
+    contains_0 = theta_lower <= 0 & theta_upper >= 0,
+    exID_fct = fct_reorder(as.factor(exID), theta_estimate)
+  )
+
+examiner_decision <- ggplot(response_summary_with_theta, aes(x = exID_fct, y = pct, fill = as.factor(response3))) +
+  geom_col() +
+  scale_fill_manual(
+    values = c("1" = "skyblue", "2" = "gray70", "3" = "firebrick"),
+    name = "Response"
+  ) +
+  labs(
+    x = "Examiner (ordered by θ)", 
+    y = "Proportion of Responses",
+    title = "Stacked Bar Chart of Examiner Responses (Ordered by θ)"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+    panel.grid.major.x = element_blank()
+  )
+
+ggplotly(examiner_decision)
+
+#highest excl
+response_summary_with_theta |> 
+  filter(response3 == "1") |> 
+  arrange(desc(pct)) |> 
+  head(5)
+
+#lowest excl
+response_summary_with_theta |> 
+  filter(response3 == "1") |> 
+  arrange(pct) |> 
+  head(5)
+
+#highest inc
+response_summary_with_theta |> 
+  filter(response3 == "2") |> 
+  arrange(desc(pct)) |> 
+  head(5)
+
+#lowest inc
+response_summary_with_theta |> 
+  filter(response3 == "2") |> 
+  arrange(pct) |> 
+  head(5)
+
+#highest id
+response_summary_with_theta |> 
+  filter(response3 == "3") |> 
+  arrange(desc(pct)) |> 
+  head(5)
+
+#lowest id
+response_summary_with_theta |> 
+  filter(response3 == "3") |> 
+  arrange(pct) |> 
+  head(5)
+```
+
+```{r}
+#8-9 min ish
+brm_busey5 <- brm(
+  formula = response5 ~ (1 | exID) + (1 | pairID),
+  data = busey,
+  family = cumulative(probit),
+  chains = 4,
+  iter = 2000,
+  seed = 0825
+)
+```
+
+```{r}
+ranefs_busey5 <- ranef(brm_busey5)
+
+full_grid <- expand_grid(
+    exID = 1:74,
+    pairID = 1:60)
+
+ex_summary_busey5 <- as_tibble(ranefs_busey5$exID[, , "Intercept"], rownames = "exID") |>
+  mutate(exID = as.integer(exID)) |>
+  select(exID, Estimate, Q2.5, Q97.5) |>
+  rename(
+    theta_estimate = Estimate,
+    theta_lower = Q2.5,
+    theta_upper = Q97.5
+  ) |> 
+  mutate(contains_0 = theta_lower <= 0 & theta_upper >= 0)
+
+pair_summary_busey5 <- as_tibble(ranefs_busey5$pairID[, , "Intercept"], rownames = "pairID") |>
+  mutate(pairID = as.integer(pairID)) |>
+  select(pairID, Estimate, Q2.5, Q97.5) |>
+  rename(
+    beta_estimate = Estimate,
+    beta_lower = Q2.5,
+    beta_upper = Q97.5
+  )
+
+full_summary_busey5 <- full_grid |>
+  left_join(ex_summary_busey5, by = "exID") |>
+  left_join(pair_summary_busey5, by = "pairID")
+
+items_busey5 <- ggplot(full_summary_busey5, aes(x = pairID, y = beta_estimate)) +
+  geom_point()+
+  geom_errorbar(aes(ymin = beta_lower, ymax = beta_upper)) +
+  labs(
+    title = "Item estimates Busey 5 cat"
+  )
+
+ggplotly(items_busey5)
+
+ex_busey5 <- ggplot(full_summary_busey5, aes(x = exID, y = theta_estimate, color = contains_0)) +
+  geom_point()+
+  geom_errorbar(aes(ymin = theta_lower, ymax = theta_upper)) +
+  scale_color_manual(values = c(`TRUE` = "darkgray", `FALSE` = "blue")) +
+  labs(
+    title = "Examiner estimates Busey 5 cat"
+  )
+
+ggplotly(ex_busey5)
+
+mean(full_summary_busey5$contains_0)
+```
+
+```{r}
+#csvs for Vivian
+# Step 1: Extract robust random effects
+ranefs_busey3_robust <- ranef(brm_busey3, robust = TRUE)
+
+# Step 2: Examiner-level (exID) effects
+ex_summary_robust <- as_tibble(ranefs_busey3_robust$exID[, , "Intercept"], rownames = "exID") |>
+  mutate(
+    exID = as.integer(exID),
+    contains_0 = Q2.5 <= 0 & Q97.5 >= 0
+  ) |>
+  rename(
+    theta_median = Estimate,
+    theta_lower = Q2.5,
+    theta_upper = Q97.5
+  )
+
+# Step 3: Item-level (pairID) effects
+pair_summary_robust <- as_tibble(ranefs_busey3_robust$pairID[, , "Intercept"], rownames = "pairID") |>
+  mutate(
+    pairID = as.integer(pairID),
+    contains_0 = Q2.5 <= 0 & Q97.5 >= 0
+  ) |>
+  rename(
+    beta_median = Estimate,
+    beta_lower = Q2.5,
+    beta_upper = Q97.5
+  )
+
+write.csv(ex_summary_robust, "busey3_examiners_robust.csv", row.names = FALSE)
+
+read_csv("~/Documents/GitHub/forensic-stats-research/notebooks/Josh-notebook/busey3_examiners_robust.csv")
+
+write.csv(pair_summary_robust, "busey3_items_robust.csv", row.names = FALSE)
+```
+
+
+
+# Week 7
+
+## Tables + graphs of repeated sim work
+
+
+
+```{r}
+#category comparisons
+categories_repeated |>
+  arrange(time_to_fit) |>
+  select(n_items, n_participants, category_system, time_to_fit)
+
+categories_repeated |>
+  arrange(theta_coverage) |>
+  select(n_items, n_participants, category_system, theta_coverage)
+
+categories_repeated |>
+  arrange(beta_coverage) |>
+  select(n_items, n_participants, category_system, beta_coverage)
+
+categories_repeated |>
+  arrange(theta_correlation) |>
+  select(n_items, n_participants, category_system, theta_correlation)
+
+categories_repeated |>
+  arrange(beta_correlation) |>
+  select(n_items, n_participants, category_system, beta_correlation)
+```
+
+```{r}
+#prior misspec comparisons
+
+prior_misspec_repeated |>
+  arrange(time_to_fit) |>
+  select(n_items, n_participants, simulation, model, time_to_fit)
+
+prior_misspec_repeated |>
+  arrange(theta_coverage) |>
+  select(n_items, n_participants, simulation, model, theta_coverage)
+
+prior_misspec_repeated |>
+  arrange(beta_coverage) |>
+  select(n_items, n_participants, simulation, model, beta_coverage)
+
+prior_misspec_repeated |>
+  arrange(theta_correlation) |>
+  select(n_items, n_participants, simulation, model, theta_correlation)
+
+prior_misspec_repeated |>
+  arrange(beta_correlation) |>
+  select(n_items, n_participants, simulation, model, beta_correlation)
+```
+
+```{r}
+#time to fit graphs
+ggplot(categories_repeated, aes(x = n_items, y = time_to_fit, color = category_system)) +
+  geom_point() +
+  geom_line(aes(group = category_system)) +
+  labs(
+    title = "Time to fit by category system",
+    x = "Number of items",
+    y = "Time to fit (seconds)"
+  )
+
+ggplot(prior_misspec_repeated, aes(x = n_items, y = time_to_fit, color = simulation)) +
+  geom_point() +
+  geom_line(aes(group = simulation)) +
+  labs(
+    title = "Time to fit by prior misspecification",
+    x = "Number of items",
+    y = "Time to fit (seconds)"
+  )
+```
+
+```{r}
+#theta coverage
+ggplot(categories_repeated, aes(x = n_items, y = theta_coverage, color = category_system)) +
+  geom_point() +
+  geom_line(aes(group = category_system)) +
+  labs(
+    title = "Theta coverage by category system",
+    x = "Number of items",
+    y = "Theta coverage"
+  )
+
+ggplot(prior_misspec_repeated, aes(x = n_items, y = theta_coverage, color = simulation)) +
+  geom_point() +
+  geom_line(aes(group = simulation)) +
+  labs(
+    title = "Theta coverage by prior misspecification",
+    x = "Number of items",
+    y = "Theta coverage"
+  )
+```
+
+```{r}
+categories_repeated |> 
+  filter(category_system == "5-category B") |> 
+  summarize(
+    mean(beta_correlation)
+  )
+```
+
+```{r}
+#beta coverage
+ggplot(categories_repeated, aes(x = n_items, y = beta_coverage, color = category_system)) +
+  geom_point() +
+  geom_line(aes(group = category_system)) +
+  labs(
+    title = "Beta coverage by category system",
+    x = "Number of items",
+    y = "Beta coverage"
+  )
+
+ggplot(prior_misspec_repeated, aes(x = n_items, y = beta_coverage, color = simulation)) +
+  geom_point() +
+  geom_line(aes(group = simulation)) +
+  labs(
+    title = "Beta coverage by prior misspecification",
+    x = "Number of items",
+    y = "Beta coverage"
+  )
+```
+
+```{r}
+#theta correlation
+ggplot(categories_repeated, aes(x = n_items, y = theta_correlation, color = category_system)) +
+  geom_point() +
+  geom_line(aes(group = category_system)) +
+  labs(
+    title = "Theta correlation by category system",
+    x = "Number of items",
+    y = "Theta correlation"
+  )
+
+ggplot(prior_misspec_repeated, aes(x = n_items, y = theta_correlation, color = simulation)) +
+  geom_point() +
+  geom_line(aes(group = simulation)) +
+  labs(
+    title = "Theta correlation by prior misspecification",
+    x = "Number of items",
+    y = "Theta correlation"
+  )
+```
+
+```{r}
+#beta correlation
+ggplot(categories_repeated, aes(x = n_items, y = beta_correlation, color = category_system)) +
+  geom_point() +
+  geom_line(aes(group = category_system)) +
+  labs(
+    title = "Beta correlation by category system",
+    x = "Number of items",
+    y = "Beta correlation"
+  )
+
+ggplot(prior_misspec_repeated, aes(x = n_items, y = beta_correlation, color = simulation)) +
+  geom_point() +
+  geom_line(aes(group = simulation)) +
+  labs(
+    title = "Beta correlation by prior misspecification",
+    x = "Number of items",
+    y = "Beta correlation"
+  )
+```
+
+
+
+## Innocence Project work
+
+
+
+```{r}
+Hicklin_testing <- Hicklin_mutated |> 
+  mutate(
+    # Totals for denominators
+    is_M = sum(ground_truth == "M", na.rm = TRUE),
+    is_N = sum(ground_truth == "N", na.rm = TRUE),
+    tn = sum(response5 == 1 & ground_truth == "N", na.rm = TRUE),
+    
+    #original version
+    fn_simple = sum(response5 == 1 & ground_truth == "M", na.rm = TRUE),
+    fp_simple = sum(response5 == 5 & ground_truth == "N", na.rm = TRUE),
+    
+    #lean included version
+    fn_lean   = sum(response5 %in% c(1,2) & ground_truth == "M", na.rm = TRUE),
+    fp_lean   = sum(response5 %in% c(4,5) & ground_truth == "N", na.rm = TRUE),
+    
+    #inc included version
+    fn_expanded   = sum(response5 %in% c(1,2,3) & ground_truth == "M", na.rm = TRUE),
+    fp_expanded   = sum(response5 %in% c(3,4,5) & ground_truth == "N", na.rm = TRUE),
+    
+  ) |> 
+  mutate(
+    fn_rate_simple = fn_simple / is_M * 100,
+    fp_rate_simple = fp_simple / is_N * 100,
+    
+    fn_rate_lean = fn_lean / is_M * 100,
+    fp_rate_lean = fp_lean / is_N * 100,
+    
+    fn_rate_expanded = fn_expanded / is_M * 100,
+    fp_rate_expanded = fp_expanded / is_N * 100,
+    
+    fp_rate_no_inc = fp_simple / (fp_simple + tn) * 100
+  ) 
+
+
+per_item_fp <- Hicklin_mutated |> 
+  mutate(
+    fp_simple = as.integer(response5 == 5 & ground_truth == "N"),
+    fp_lean = as.integer(response5 %in% c(4,5) & ground_truth == "N"),
+    fp_expanded = as.integer(response5 %in% c(3,4,5) & ground_truth == "N")
+  ) |> 
+  group_by(pairID) |> 
+  summarize(
+    fp_rate_simple = mean(fp_simple, na.rm = TRUE) * 100,
+    fp_rate_lean = mean(fp_lean, na.rm = TRUE) * 100,
+    fp_rate_expanded = mean(fp_expanded, na.rm = TRUE) * 100
+  )
+
+per_item_fp |> slice_max(fp_rate_simple, n = 5)
+per_item_fp |> slice_max(fp_rate_lean, n = 5)
+per_item_fp |> slice_max(fp_rate_expanded, n = 5)
+```
+
+```{r}
+library(ggplot2)
+library(dplyr)
+
+# Thresholds for 5 categories
+cuts <- c(-1.5, -0.5, 0.5, 1.5)  # 4 cutpoints
+cat_labels <- c("Excl", "Lean Excl", "Inc", "Lean ID", "ID")
+
+# Function to make a data frame of normal density with category labels
+make_curve_data <- function(mu = 0, sigma = 1, cuts) {
+  x_vals <- seq(-4, 4, length.out = 500)
+  dens <- dnorm(x_vals, mean = mu, sd = sigma)
+  
+  # Assign categories
+  category <- cut(x_vals, 
+                  breaks = c(-Inf, cuts, Inf),
+                  labels = cat_labels,
+                  right = FALSE)
+  
+  tibble(x = x_vals, y = dens, category = category)
+}
+
+curve_data <- make_curve_data(cuts = cuts)
+
+# Helper: pick categories to highlight
+plot_highlight <- function(highlight_cats, title) {
+  curve_data %>%
+    mutate(highlight = category %in% highlight_cats) %>%
+    ggplot(aes(x, y, fill = highlight)) +
+    geom_area(alpha = 0.6, color = "black") +
+    scale_fill_manual(values = c("TRUE" = "red", "FALSE" = "gray80")) +
+    geom_vline(xintercept = cuts, linetype = "dashed") +
+    annotate("text", x = c(-2.0, -1, 0, 1, 2.0), y = 0.02, 
+             label = cat_labels, size = 4) +
+    labs(title = title, x = "Decision", y = "Density") +
+    theme_minimal() +
+    theme(legend.position = "none")
+}
+
+# Example plots
+p_simple_fp   <- plot_highlight(c("ID"), "FP - Simple (Only ID counted)")
+p_lean_fp     <- plot_highlight(c("Lean ID", "ID"), "FP - Lean (Lean included)")
+p_expanded_fp <- plot_highlight(c("Inc", "Lean ID", "ID"), "FP - Expanded (Inc included)")
+
+p_simple_fp
+p_lean_fp
+p_expanded_fp
+
+ggsave(
+  filename = "fp_expanded.png",
+  plot = p_expanded_fp,
+  width = 6, height = 4, dpi = 300,
+  bg = "transparent"
+)
+```
+
+```{r}
+library(ggplot2)
+library(dplyr)
+
+
+Hicklin_mutated %>%
+  filter(pairID == 64) %>%
+  count(response5) %>%
+  mutate(prop = n / sum(n)) %>%
+  ggplot(aes(x = factor(response5), y = prop, fill = factor(response5))) +
+  geom_col() +
+  scale_fill_brewer(palette = "Set2") +
+  labs(
+    title = "Response Distribution for PairID: 64",
+    x = "Response Category",
+    y = "Proportion"
+  ) +
+  theme_minimal()
+
+```
+
+
+
+## More with sim data
+
+
+
+```{r}
+ggplot(categories_summary_repeated) +
+  aes(
+    x = n_items,
+    y = theta_coverage,
+    colour = category_system
+  ) +
+  geom_point() +
+  geom_line() +
+  scale_color_hue(direction = 1) +
+  labs(
+    title = "Theta coverage by category system"
+  )
+
+ggplot(categories_summary_repeated) +
+  aes(
+    x = n_items,
+    y = beta_coverage,
+    colour = category_system
+  ) +
+  geom_point() +
+  geom_line() +
+  scale_color_hue(direction = 1) +
+  labs(
+    title = "Beta coverage by category system"
+  )
+
+ggplot(categories_summary_repeated) +
+  aes(
+    x = n_items,
+    y = theta_correlation,
+    colour = category_system
+  ) +
+  geom_point() +
+  geom_line() +
+  scale_color_hue(direction = 1) +
+  labs(
+    title = "Theta correlation by category system"
+  )
+
+ggplot(categories_summary_repeated) +
+  aes(
+    x = n_items,
+    y = beta_correlation,
+    colour = category_system
+  ) +
+  geom_point() +
+  geom_line() +
+  scale_color_hue(direction = 1) +
+  labs(
+    title = "Beta correlation by category system"
+  )
+
+ggplot(categories_summary_repeated) +
+  aes(
+    x = n_items,
+    y = time_to_fit,
+    colour = category_system
+  ) +
+  geom_point() +
+  geom_line() +
+  scale_color_hue(direction = 1) +
+  labs(
+    title = "Time to fit model by category system"
+  )
+```
+
+```{r}
+ggplot(categories_per_run_repeated) +
+  aes(x = category_system, y = theta_coverage) +
+  geom_boxplot(fill = "darkgray") +
+  labs(
+    title = "Theta coverage by category system",
+    x = "Category system",
+    y = "Theta coverage"
+  )
+
+#beta coverages for just no_theta_model
+ggplot(sim_results_no_theta_model_per_run, aes(x = n_items, y = beta_coverage)) +
+  geom_point()+
+  geom_line()
+
+ggplot(sim_results_no_theta_model_summary, aes(x = n_items, y = beta_coverage)) +
+  geom_point()+
+  geom_line()
+
+```
+
+
+
+# Week 8
+
+
+
+```{r}
+
+beta_cov_by_model <- ggplot(prior_misspec_summary_repeated, aes(x = n_items, y = beta_coverage, color = model)) +
+  geom_point() +
+  geom_line() +
+  scale_color_discrete(name = "Model Setting", 
+                       breaks = c("Theta", "Both normal", "Mixed normal/skew", "Normal beta", "Normal theta", "No theta"),
+                       labels = c("No Theta Sim", "Theta & Beta Skewed", "Partial Skew", "Skewed Beta", "Skewed Theta", "No Theta Model")
+                       
+                       
+                       ) +
+  theme(legend.title = element_text(size = 16),legend.text = element_text(size = 14)) +
+  labs(
+    title = "Beta Coverage by Model",
+    x = "Number of Items",
+    y = "Beta Coverage"
+  )
+
+ggsave("beta_cov_by_model.png", beta_cov_by_model)
+```
+
+```{r}
+ggplot(prior_misspec_per_run_repeated, )
+```
+

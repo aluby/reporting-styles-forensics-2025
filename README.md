@@ -14,6 +14,8 @@ Summer 2025 research project at Carleton College investigating reporting styles 
 
 -   **`paper-graphs.qmd` —** all of the code used to create all of the graphs in our paper
 
+-   `Simulation_studies` — a folder containing
+
 -   `Final simulations.R` — all of the code used to carry out simulations. Each simulation setting is included in its own section in the file with comments throughout explaining each one.
 
 -   **`Graph_images` —** all of the image files of the graphs used in our paper

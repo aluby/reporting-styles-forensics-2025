@@ -1,0 +1,5 @@
+n_items,n_participants,simulation,model,time_to_fit,theta_coverage,beta_coverage,theta_correlation,beta_correlation
+20,100,Theta,No theta,99.59909472465516,NA,0.71,NA,0.9879138964683716
+50,100,Theta,No theta,224.51462547779084,NA,0.64,NA,0.9837058121431818
+600,100,Theta,No theta,447.6056824207306,NA,0.77067,NA,0.9047464607100826
+300,100,Theta,No theta,409.5329299449921,NA,0.75872,NA,0.9494883172891224

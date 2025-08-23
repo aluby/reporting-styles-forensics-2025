@@ -7,19 +7,8 @@ editor: visual
 ```{r}
 # set up
 library(ggplot2)
+library(dplyr)
 paper_theme <- theme_minimal(base_family = "Atkinson Hyperlegible", base_size = 16)
-```
-
-```{r}
-#Simualations - Theta coverage by category system
-ggplot(categories_per_run_repeated) +
-  aes(x = category_system, y = theta_coverage) +
-  geom_boxplot(fill = "darkgray") +
-  labs(
-    title = "Theta coverage by category system",
-    x = "Category system",
-    y = "Theta coverage"
-  )
 ```
 
 ```{r}
@@ -170,4 +159,157 @@ no_theta_comparison_plot <- ggplot(hicklin_busey_comparison) +
   
 ggsave("no_theta_comparison_plot.png", no_theta_comparison_plot)
 
+```
+
+```{r}
+# simulation - beta_cov_by_model
+
+beta_cov_by_model_paper <- prior_misspec_summary_repeated |> 
+  group_by(n_items, condition) |> 
+  ggplot(aes(x = n_items, y = beta_coverage, color = condition)) +
+  geom_point() +
+  geom_line() +
+  geom_hline(yintercept = 0.95, linetype = "dashed", color = "black") +
+  scale_color_viridis_d(
+    option = "plasma", 
+    end = 0.8,
+    name = "Condition",
+    breaks = c("No theta sim", "Both skewed", "Mixture", "Skewed beta", "Skewed theta", "No theta model"),
+    labels = c("No Theta Sim", "Both Skewed", "Mixture", "Skewed Beta", "Skewed Theta", "No Theta Model")) +
+      labs(
+        title = "Beta Coverage by Model Misspecification",
+        x = "Number of Items",
+        y = "Average Beta Coverage"
+      ) +
+      paper_theme
+
+ggsave("beta_cov_by_model_paper.png", beta_cov_by_model_paper, width = 8, height = 4)
+```
+
+```{r}
+# simulation - skew_coverage
+
+skew_coverage_paper <- prior_misspec_per_run_repeated |> 
+  filter(condition == c("Skewed theta", "Skewed beta", "Both skewed", "Mixture")) |> 
+  ggplot(aes(x = condition, y = theta_coverage)) +
+  geom_boxplot() +
+  geom_hline(yintercept = 0.95, linetype = "dashed", color = "red") +
+  ylim(0.6,1) +
+  labs(
+    title = "Theta Coverage Across Skewed Simulations",
+    x = "Condition",
+    y = "Theta Coverage"
+  ) +
+  paper_theme
+
+ggsave("skew_coverage_paper.png", skew_coverage_paper, width = 6, height = 4)
+```
+
+```{r}
+# simulation - true_vs_estimated_beta
+
+true_vs_est_beta <- ggplot(true_vs_est_scatter, aes(x = beta_estimate, y = beta)) +
+  geom_point(color = "black") +
+  geom_errorbar(aes(
+    ymin = beta_lower,
+    ymax = beta_upper,
+    color = factor(beta_covered)
+  )) +
+  geom_abline() +
+  scale_color_manual(
+    values = c("0" = "#E16462FF", "1" = "black"),
+    name = "Coverage",
+    labels = c("0" = "Not Covered", "1" = "Covered")
+  ) +
+  labs(
+    title = "True vs. Estimated Beta",
+    x = "Estimated Beta",
+    y = "True Beta"
+  ) +
+  paper_theme
+
+ggsave("true_vs_est_beta.png", true_vs_est_beta, width = 6, height = 4)
+```
+
+```{r}
+# simulation - bayes_vs_frequentist
+
+bayes_vs_frequentist_paper <- categories_summary_repeated |> 
+  bind_rows(frequentist_summary_repeated) |> 
+  mutate(category_system = factor(category_system, 
+    levels = c(
+    "3-category", "3-category-freq", 
+    "5-category A", "5-category-a-freq", 
+    "5-category B", "5-category-b-freq"
+  ),
+    labels = c("3 cat (Bayes)", "3 cat (Freq)",
+               "5 cat A (Bayes)", "5 cat A (Freq)",
+               "5 cat b (Bayes)", "5-cat B (Freq)")
+  )) |> 
+  ggplot(aes(x = category_system, y = theta_coverage)) +
+  geom_boxplot() +
+  geom_hline(yintercept = 0.95, linetype = "dashed", color = "red") +
+  ylim(0,1) +
+  labs(
+    title = "Theta Coverage: Bayesian vs. Frequentist",
+    x = "Conclusion Scale",
+    y = "Average Theta Coverage"
+  ) +
+  paper_theme +
+  theme(
+    axis.text.x = element_text(angle = 35, hjust = 1, size = 11)
+  )
+
+ggsave("bayes_vs_frequentist_paper.png", bayes_vs_frequentist_paper, width = 6, height = 4)
+```
+
+```{r}
+# simulation - corr_plots (appendix)
+
+theta_corr_paper <- ggplot(categories_summary_repeated, aes(x = n_items, y = theta_correlation, color = category_system)) +
+  geom_point() +
+  geom_line() +
+  scale_color_viridis_d(option = "plasma", end = 0.8) +
+  labs(
+    title = "Theta Correlation by Number of Items",
+    x = "Number of Items",
+    y = "Average Theta Correlation",
+    color = "Conclusion Scale"
+  ) +
+  paper_theme 
+
+
+beta_corr_paper <- ggplot(categories_summary_repeated, aes(x = n_items, y = beta_correlation, color = category_system)) +
+  geom_point() +
+  geom_line() +
+  scale_color_viridis_d(option = "plasma", end = 0.8) +
+  labs(
+    title = "Beta Correlation by Number of Items",
+    x = "Number of Items",
+    y = "Average Beta Correlation",
+    color = "Conclusion Scale"
+  ) +
+  paper_theme
+
+corr_plots_paper <- theta_corr_paper / beta_corr_paper + plot_layout(guides = "collect") & theme(legend.position = "bottom")
+
+ggsave("corr_plots_paper.png", corr_plots_paper, width = 8, height = 10)
+```
+
+```{r}
+# simulation - model_runtime (appendix)
+
+model_runtime_paper <- ggplot(categories_summary_repeated, aes(x = n_items, y = time_to_fit, color = category_system)) +
+  geom_point() +
+  geom_line() +
+  labs(
+    title = "Model Runtime by Number of Items",
+    x = "Number of Items",
+    y = "Average Time (seconds)",
+    color = "Conlusion Scale"
+  ) +
+  scale_color_viridis_d(option = "plasma", end = 0.8) +
+  paper_theme
+
+ggsave("model_runtime_paper.png", model_runtime_paper, width = 8, height = 4)
 ```
